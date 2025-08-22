@@ -216,6 +216,15 @@ function GuessMap({ googleReady, guess, answer, onGuess }) {
         mapId: MAP_ID,
       });
       mapRef.current = map;
+// Bind a hidden/dummy Street View to this map so clicks on the guess map
+// never affect our visible Street View panorama.
+try {
+  const hiddenDiv = document.createElement('div');
+  hiddenDiv.style.width = '0px';
+  hiddenDiv.style.height = '0px';
+  const dummyPano = new google.maps.StreetViewPanorama(hiddenDiv, { visible: false });
+  map.setStreetView(dummyPano);
+} catch (e) { console.warn('Failed to attach dummy Street View', e); }
       map.addListener('click', (e) => {
         const ll = { lat: e.latLng.lat(), lng: e.latLng.lng() };
         onGuess && onGuess([ll.lat, ll.lng]);
