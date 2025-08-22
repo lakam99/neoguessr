@@ -11,10 +11,16 @@ const API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
 const MAP_ID = import.meta.env.VITE_GOOGLE_MAPS_MAP_ID || 'DEMO_MAP_ID';
 const LOCATION_MODE = (import.meta.env.VITE_LOCATION_MODE || 'random').toLowerCase(); // 'random' | 'country'
 const COUNTRY = import.meta.env.VITE_COUNTRY || '';
+const INCLUDE_OCEANS = String(import.meta.env.VITE_INCLUDE_OCEANS || 'false').toLowerCase() === 'true';
+const LOW_QUOTA_MODE = String(import.meta.env.VITE_LOW_QUOTA_MODE || 'false').toLowerCase() === 'true';
+const SV_ATTEMPT_BUDGET = parseInt(import.meta.env.VITE_SV_ATTEMPT_BUDGET || '8', 10);
+const SV_BASE_BACKOFF_MS = parseInt(import.meta.env.VITE_SV_BASE_BACKOFF_MS || '900', 10);
+const SV_MAX_RADIUS_M = parseInt(import.meta.env.VITE_SV_MAX_RADIUS_M || '300000', 10);
 
 // ------------------------------ Utilities ------------------------------
 const KM_PER_EARTH_RADIAN = 6371;
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+function jitter(ms) { return Math.floor(ms * (0.8 + Math.random()*0.4)); }
 function deg2rad(d) { return (d * Math.PI) / 180; }
 function haversine(lat1, lon1, lat2, lon2) {
   const dLat = deg2rad(lat2 - lat1);
@@ -43,37 +49,30 @@ function loadGoogleMaps(apiKey) {
   return mapsPromise;
 }
 
-// ------------------------------ Street View Picker (throttled) ------------------------------
-function randomLatLngWorldwide() {
+// ------------------------------ Land-biased sampling ------------------------------
+const LAND_BOXES = [
+  // [south, west, north, east]
+  [7, -168, 70, -52],    // North America (broad)
+  [-56, -82, 13, -34],   // South America
+  [35, -10, 71, 40],     // Europe
+  [-35, -18, 37, 52],    // Africa (coverage varies)
+  [5, 60, 55, 150],      // East/Central Asia
+  [12, 26, 42, 60],      // West Asia
+  [-44, 112, -10, 154],  // Australia
+  [-47, 166, -34, 179],  // New Zealand
+];
+function rndBetween(a,b){ return a + Math.random()*(b-a); }
+function randomLatLngLandBiased(){
+  const b = LAND_BOXES[Math.floor(Math.random()*LAND_BOXES.length)];
+  return { lat: rndBetween(b[0], b[2]), lng: rndBetween(b[1], b[3]) };
+}
+function randomLatLngWorldwide(){
   const lat = (Math.random() * 140) - 70; // -70..70
   const lng = (Math.random() * 360) - 180;
   return { lat, lng };
 }
 
-async function geocodeCountryBounds(google, countryName) {
-  return new Promise((resolve, reject) => {
-    const geocoder = new google.maps.Geocoder();
-    geocoder.geocode({ address: countryName }, (results, status) => {
-      if (status === 'OK' && results && results.length) {
-        const geom = results[0].geometry;
-        const vp = geom.viewport || geom.bounds;
-        if (vp) resolve(vp);
-        else reject(new Error('No viewport for country'));
-      } else {
-        reject(new Error('Geocoding failed: ' + status));
-      }
-    });
-  });
-}
-
-function randomLatLngInBounds(bounds) {
-  const sw = bounds.getSouthWest();
-  const ne = bounds.getNorthEast();
-  const lat = sw.lat() + Math.random() * (ne.lat() - sw.lat());
-  const lng = sw.lng() + Math.random() * (ne.lng() - sw.lng());
-  return { lat, lng };
-}
-
+// ------------------------------ Street View Picker (budgeted) ------------------------------
 function svGetPanorama(google, options) {
   return new Promise((resolve, reject) => {
     const sv = new google.maps.StreetViewService();
@@ -87,74 +86,80 @@ function svGetPanorama(google, options) {
   });
 }
 
-const FALLBACK_SEEDS = [
-  { lat: 48.8584, lng: 2.2945 },    // Paris
-  { lat: 51.5007, lng: -0.1246 },   // London
-  { lat: 40.6892, lng: -74.0445 },  // NYC
-  { lat: 35.6762, lng: 139.6503 },  // Tokyo
-  { lat: 34.0522, lng: -118.2437 }, // LA
-  { lat: -33.8688, lng: 151.2093 }, // Sydney
-  { lat: -23.5505, lng: -46.6333 }, // São Paulo
-  { lat: 52.5200, lng: 13.4050 },   // Berlin
-  { lat: 41.9028, lng: 12.4964 },   // Rome
-  { lat: 43.6532, lng: -79.3832 },  // Toronto
+const CURATED = [
+  { lat:48.858370, lng:2.294481, panoId: null },
+  { lat:40.689247, lng:-74.044502, panoId: null },
+  { lat:51.500729, lng:-0.124625, panoId: null },
+  { lat:35.658581, lng:139.745438, panoId: null },
+  { lat:-33.856784, lng:151.215297, panoId: null },
+  { lat:43.642566, lng:-79.387057, panoId: null },
+  { lat:37.8199286, lng:-122.4782551, panoId: null },
+  { lat:41.890210, lng:12.492231, panoId: null },
+  { lat:52.516275, lng:13.377704, panoId: null },
+  { lat:-22.951916, lng:-43.210487, panoId: null },
 ];
 
 async function pickStreetViewLocation(google, mode, country) {
-  const svRadiusSequence = [50000, 150000, 300000, 500000];
-  const attemptsPerRadius = 6; // keep total calls smaller to avoid rate limits
-  const backoffs = [150, 300, 600, 900, 1200, 1500];
+  // Low quota: pick from curated list, resolve single pano near that point
+  if (LOW_QUOTA_MODE) {
+    const seed = CURATED[Math.floor(Math.random()*CURATED.length)];
+    const pano = await svGetPanorama(google, {
+      location: { lat: seed.lat, lng: seed.lng },
+      radius: 2000,
+      preference: google.maps.StreetViewPreference.NEAREST,
+      source: google.maps.StreetViewSource.OUTDOOR,
+    });
+    return { lat: pano.location.latLng.lat(), lng: pano.location.latLng.lng(), panoId: pano.location.pano };
+  }
+
   let bounds = null;
-
   if (mode === 'country' && country) {
-    try { bounds = await geocodeCountryBounds(google, country); }
-    catch (e) { console.warn('Country geocode failed, falling back to random', e); }
+    try { 
+      bounds = await new Promise((resolve, reject) => {
+        const geocoder = new google.maps.Geocoder();
+        geocoder.geocode({ address: country }, (results, status) => {
+          if (status === 'OK' && results && results.length) {
+            resolve(results[0].geometry.viewport || results[0].geometry.bounds);
+          } else reject(new Error('Geocode failed: ' + status));
+        });
+      });
+    } catch (e) { console.warn('Country geocode failed, falling back'); }
   }
 
-  let attempt = 0;
-  for (const radius of svRadiusSequence) {
-    for (let i = 0; i < attemptsPerRadius; i++) {
-      const candidate = bounds ? randomLatLngInBounds(bounds) : randomLatLngWorldwide();
-      try {
-        const pano = await svGetPanorama(google, {
-          location: candidate,
-          radius,
-          preference: google.maps.StreetViewPreference.NEAREST,
-          source: google.maps.StreetViewSource.DEFAULT,
-        });
-        const lat = pano.location.latLng.lat();
-        const lng = pano.location.latLng.lng();
-        const panoId = pano.location.pano;
-        return { lat, lng, panoId };
-      } catch {
-        const delay = backoffs[Math.min(attempt, backoffs.length - 1)];
-        await sleep(delay);
-        attempt++;
-      }
+  let radius = 20000;
+  const radiusSeq = [20000, 60000, 120000, SV_MAX_RADIUS_M];
+  const budget = Math.max(2, Math.min(20, SV_ATTEMPT_BUDGET));
+  for (let i = 0; i < budget; i++) {
+    const candidate =
+      bounds ? (() => {
+        const sw = bounds.getSouthWest();
+        const ne = bounds.getNorthEast();
+        return { lat: rndBetween(sw.lat(), ne.lat()), lng: rndBetween(sw.lng(), ne.lng()) };
+      })()
+      : (INCLUDE_OCEANS ? randomLatLngWorldwide() : randomLatLngLandBiased());
+    radius = radiusSeq[Math.min(i, radiusSeq.length - 1)];
+    try {
+      const pano = await svGetPanorama(google, {
+        location: candidate,
+        radius,
+        preference: google.maps.StreetViewPreference.NEAREST,
+        source: google.maps.StreetViewSource.OUTDOOR,
+      });
+      return { lat: pano.location.latLng.lat(), lng: pano.location.latLng.lng(), panoId: pano.location.pano };
+    } catch {
+      await sleep(jitter(SV_BASE_BACKOFF_MS));
     }
   }
 
-  // Fallback near popular coverage seeds (short, with backoff)
-  for (const seed of FALLBACK_SEEDS) {
-    for (const radius of [1000, 5000, 20000]) {
-      try {
-        const pano = await svGetPanorama(google, {
-          location: seed,
-          radius,
-          preference: google.maps.StreetViewPreference.NEAREST,
-          source: google.maps.StreetViewSource.DEFAULT,
-        });
-        const lat = pano.location.latLng.lat();
-        const lng = pano.location.latLng.lng();
-        const panoId = pano.location.pano;
-        return { lat, lng, panoId };
-      } catch {
-        await sleep(200);
-      }
-    }
-  }
-
-  throw new Error('Could not find a Street View location after many attempts.');
+  // Final fallback: curated
+  const seed = CURATED[Math.floor(Math.random()*CURATED.length)];
+  const pano = await svGetPanorama(google, {
+    location: { lat: seed.lat, lng: seed.lng },
+    radius: 3000,
+    preference: google.maps.StreetViewPreference.NEAREST,
+    source: google.maps.StreetViewSource.OUTDOOR,
+  });
+  return { lat: pano.location.latLng.lat(), lng: pano.location.latLng.lng(), panoId: pano.location.pano };
 }
 
 // ------------------------------ Street View component (reuse instance) ------------------------------
@@ -166,7 +171,6 @@ function StreetViewPane({ googleReady, panoLatLng, onLoaded }) {
     if (!googleReady || !ref.current || !panoLatLng) return;
     const google = window.google;
     if (!panoRef.current) {
-      // First-time create
       const pano = new google.maps.StreetViewPanorama(ref.current, {
         position: panoLatLng,
         pov: { heading: 0, pitch: 0 },
@@ -183,7 +187,6 @@ function StreetViewPane({ googleReady, panoLatLng, onLoaded }) {
       panoRef.current = pano;
       onLoaded && onLoaded();
     } else {
-      // Reuse instance and just move the position
       try { panoRef.current.setPosition(panoLatLng); } catch (e) { console.warn('pano.setPosition failed', e); }
     }
   }, [googleReady, panoLatLng, onLoaded]);
@@ -191,7 +194,7 @@ function StreetViewPane({ googleReady, panoLatLng, onLoaded }) {
   return <div ref={ref} className="w-full h-full bg-black rounded-2xl" />;
 }
 
-// ------------------------------ Google Map guess component (mapId included) ------------------------------
+// ------------------------------ Google Map guess component ------------------------------
 function GuessMap({ googleReady, guess, answer, onGuess }) {
   const ref = React.useRef(null);
   const mapRef = React.useRef(null);
@@ -420,6 +423,7 @@ export default function App() {
             <span className="px-3 py-1 rounded-full bg-slate-700/60">Round {round} / {maxRounds}</span>
             <span className="px-3 py-1 rounded-full bg-emerald-600/80">Score {totalScore}</span>
             <span className="px-3 py-1 rounded-full bg-slate-700/60">Mode: {LOCATION_MODE === 'country' && COUNTRY ? `Country (${COUNTRY})` : 'Random'}</span>
+            <span className="px-3 py-1 rounded-full bg-slate-700/60">{LOW_QUOTA_MODE ? 'Low quota: On' : 'Low quota: Off'}</span>
             {fbReady ? (
               user ? (
                 <span className="px-3 py-1 rounded-full bg-indigo-600/80">{user.displayName || user.email}</span>
@@ -451,7 +455,7 @@ export default function App() {
               <div className="w-full h-full grid place-items-center p-6 text-center bg-slate-900/60">
                 <div className="space-y-2">
                   <p className="text-red-300 font-semibold">{error}</p>
-                  <button onClick={startNewRoundInternal} className="px-4 py-2 bg-slate-700 rounded-xl hover:bg-slate-600">Try again</button>
+                  <button onClick={startNewRoundInternal} className="px-4 py-2 bg-slate-700 rounded-xl hover:bg-slate-600" disabled={picking}>Try again</button>
                 </div>
               </div>
             )}
@@ -474,7 +478,7 @@ export default function App() {
           <div className="flex items-center gap-2">
             {!reveal ? (
               <button
-                disabled={!googleReady || !answer || !guess || false}
+                disabled={!googleReady || !answer || !guess || picking}
                 onClick={onSubmitGuess}
                 className="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-600 disabled:cursor-not-allowed"
               >
@@ -484,7 +488,8 @@ export default function App() {
               <div className="flex gap-2">
                 <button
                   onClick={onNext}
-                  className="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500"
+                  disabled={picking}
+                  className="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:bg-slate-600 disabled:cursor-not-allowed"
                 >
                   {round >= maxRounds ? 'Play again' : 'Next round'}
                 </button>
