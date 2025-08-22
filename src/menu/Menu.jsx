@@ -56,13 +56,13 @@ export default function Menu(){
         <p className="opacity-80">Pick your challenge, then jump in.</p>
       </div>
 
-      <div className="md:grid md:grid-cols-4 gap-3 flex gap-2 overflow-x-auto snap-x snap-mandatory pb-1">
+      <div className="md:grid md:grid-cols-4 gap-3 flex gap-2 overflow-x-auto snap-x snap-mandatory py-2">
         {Object.entries(PRESETS).map(([key, val]) => {
           const title = key==='cia' ? 'CIA/Rainbolt' : key[0].toUpperCase() + key.slice(1);
           const active = draft.preset === key;
           return (
-            <div className="snap-start min-w-[68%] sm:min-w-[48%] md:min-w-0"><button key={key} onClick={()=>applyPreset(key)} aria-pressed={active} className={`p-3 rounded-xl text-left transition transform ${active ? 'ring-2 ring-indigo-400 bg-indigo-600 text-white shadow-lg shadow-indigo-500/20 scale-[1.02]' : 'ring-1 ring-white/10 bg-slate-800/70 hover:bg-slate-700/70'}`}>
-              <div className="font-semibold">{title} <span className="opacity-90 text-xs">({MULTIPLIER_LABEL[key]})</span> {active && <span className="ml-2 px-2 py-0.5 rounded-full text-[10px] bg-white/20">Selected</span>}</div>
+            <div className="snap-start min-w-[68%] sm:min-w-[48%] md:min-w-0 py-1"><button key={key} onClick={()=>applyPreset(key)} aria-pressed={active} className={`p-3 rounded-xl text-left transition transform ${active ? 'ring-2 ring-indigo-400 bg-indigo-600 text-white shadow-lg shadow-indigo-500/20 scale-[1.02]' : 'ring-1 ring-white/10 bg-slate-800/70 hover:bg-slate-700/70'}`}>
+              <div className="font-semibold">{title} <span className="opacity-90 text-xs">({MULTIPLIER_LABEL[key]})</span> {active && <span className="ml-2 px-2 py-0.5 rounded-full text-[10px] bg-white/20 text-center">Selected</span>}</div>
               <div className="text-xs opacity-80 mt-1">
                 {val.lowQuotaMode ? 'Curated SV, ' : ''}
                 {val.includeOceans ? 'Includes oceans, ' : 'Land‑biased, '}

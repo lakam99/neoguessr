@@ -185,10 +185,10 @@ export default function Game({ user }){
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center justify-between rounded-2xl bg-slate-900/70 ring-1 ring-white/10 p-3 text-sm lg:text-base">
         <div className="flex items-center gap-2">
-          <span className="px-3 py-1 rounded-full bg-slate-700/70">Round {round} / {maxRounds}</span>
-          <span className="px-3 py-1 rounded-full bg-slate-700/70">Total: {Math.round(totalScore)} pts</span>
+          <span className="px-3 py-1 rounded-full bg-slate-700/70 text-center">Round {round} / {maxRounds}</span>
+          <span className="px-3 py-1 rounded-full bg-slate-700/70 text-center">Total: {Math.round(totalScore)} pts</span>
           {reveal && lastResult && (
-            <span className="px-3 py-1 rounded-full bg-slate-700/70">
+            <span className="px-3 py-1 rounded-full bg-slate-700/70 text-center">
               This round: {Math.round(lastResult.points)} pts
               <span className="opacity-70"> (base {Math.round(lastResult.base)} × {lastResult.mult.toFixed(1)})</span>
                · {formatKm(lastResult.distanceKm)}
@@ -270,7 +270,7 @@ export default function Game({ user }){
         </div>
       )}
 
-      <div className="rounded-2xl bg-slate-900/70 ring-1 ring-white/10 p-4">
+      <div className="hidden lg:block rounded-2xl bg-slate-900/70 ring-1 ring-white/10 p-4">
         <div className="flex items-center justify-between mb-2">
           <h2 className="text-xl font-semibold">Top Scores</h2>
           <span className="text-xs opacity-70">{fbReady ? "Live" : "Offline (configure Firebase)"}</span>

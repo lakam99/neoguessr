@@ -21,14 +21,14 @@ function TopNav({ user, onSignIn, onSignOut }) {
         {fbReady ? (
           user ? (
             <>
-              <span className="px-3 py-1 rounded-full bg-indigo-600/80">{user.displayName || user.email}</span>
+              <span className="px-3 py-1 rounded-full bg-indigo-600/80 text-center">{user.displayName || user.email}</span>
               <button onClick={onSignOut} className="px-3 py-1 rounded-lg bg-slate-700 hover:bg-slate-600">Sign out</button>
             </>
           ) : (
             <button onClick={onSignIn} className="px-3 py-1 rounded-lg bg-emerald-700 hover:bg-emerald-600">Sign in</button>
           )
         ) : (
-          <span className="px-3 py-1 rounded-full bg-slate-700/60">Scoreboard offline</span>
+          <span className="px-3 py-1 rounded-full bg-slate-700/60 text-center">Scoreboard offline</span>
         )}
       </div>
     </header>
