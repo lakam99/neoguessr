@@ -1,16 +1,33 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+    // Legacy global scores (kept for backward compatibility)
     match /scores/{docId} {
       allow read: if true;
       allow create: if request.auth != null
-        && request.resource.data.keys().hasOnly(['username','score','uid','createdAt'])
+        && request.resource.data.keys().hasOnly(['username','score','uid','createdAt','mode'])
         && request.resource.data.username is string
         && request.resource.data.score is int
         && request.resource.data.uid == request.auth.uid
+        && (request.resource.data.mode == null || request.resource.data.mode is string)
         && request.resource.data.createdAt == request.time;
       allow update, delete: if false;
     }
+
+    // New per-mode leaderboards
+    match /leaderboards/{mode}/scores/{scoreId} {
+      allow read: if true;
+      allow create: if request.auth != null
+        && request.resource.data.keys().hasOnly(['username','score','uid','createdAt','mode'])
+        && request.resource.data.username is string
+        && request.resource.data.score is int
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.mode is string
+        && request.resource.data.mode == mode
+        && request.resource.data.createdAt == request.time;
+      allow update, delete: if false;
+    }
+
     match /users/{uid} {
       allow read: if request.auth != null && request.auth.uid == uid;
       allow create, update: if request.auth != null && request.auth.uid == uid

@@ -1,10 +1,11 @@
 import React from "react";
-import { Loader } from "@googlemaps/js-api-loader";
 import { ready as fbReady, db, collection, addDoc, serverTimestamp, query, orderBy, limit, onSnapshot } from "../firebase";
 import { useSettings } from "../ctx/SettingsContext.jsx";
+import { loadGoogleMaps } from "../lib/maps.js";
+import StreetViewStatic from "../components/StreetViewStatic.jsx";
+import GuessMap from "../components/GuessMap.jsx";
 
 const API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
-const MAP_ID = import.meta.env.VITE_GOOGLE_MAPS_MAP_ID || "DEMO_MAP_ID";
 
 const KM_PER_EARTH_RADIAN = 6371;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -19,14 +20,10 @@ function difficultyMultiplier(preset){
     case 'ez': return 0.5;
     case 'hard': return 1.2;
     case 'cia': return 1.6;
-    // 'moderate' is now hard by request
     case 'moderate': return 1.0;
     default: return 1.0;
   }
 }
-
-let mapsPromise = null;
-function loadGoogleMaps(apiKey) { if (typeof window === "undefined") return Promise.reject(new Error("No window")); if (window.google && window.google.maps) return Promise.resolve(window.google); if (mapsPromise) return mapsPromise; const loader = new Loader({ apiKey, version: "weekly", libraries: ["marker", "geocoding"] }); mapsPromise = loader.load().then(() => window.google); return mapsPromise; }
 
 const LAND_BOXES = [[7,-168,70,-52],[-56,-82,13,-34],[35,-10,71,40],[-35,-18,37,52],[5,60,55,150],[12,26,42,60],[-44,112,-10,154],[-47,166,-34,179]];
 function rndBetween(a, b){ return a + Math.random()*(b-a); }
@@ -54,47 +51,23 @@ async function pickStreetViewLocation(google, settings, curatedQueue){
   const seed = CURATED[Math.floor(Math.random()*CURATED.length)]; const pano = await svGetPanorama(google,{location:seed,radius:3000,preference:google.maps.StreetViewPreference.NEAREST,source:google.maps.StreetViewSource.OUTDOOR}); return { lat:pano.location.latLng.lat(), lng:pano.location.latLng.lng(), panoId:pano.location.pano };
 }
 
-function StreetViewPane({ googleReady, panoLatLng, freeze }){
+function InteractiveStreetView({ googleReady, panoLatLng }){
   const ref=React.useRef(null); const panoRef=React.useRef(null);
-  const initHeadingRef=React.useRef(0);
   React.useEffect(()=>{
     if(!googleReady||!ref.current||!panoLatLng) return;
     const google=window.google;
     if(!panoRef.current){
-      // CIA: pick a random heading (0-360) and tiny random pitch
-      initHeadingRef.current = Math.floor(Math.random()*360);
-      const initialPOV = { heading:initHeadingRef.current, pitch: (Math.random()*20)-10 };
       panoRef.current = new google.maps.StreetViewPanorama(ref.current,{
-        position:panoLatLng, pov: initialPOV, zoom:0,
+        position:panoLatLng, pov: { heading:0, pitch:0 }, zoom:0,
         motionTracking:false, motionTrackingControl:false,
-        addressControl:false, showRoadLabels:false, linksControl: !freeze,
-        zoomControl: !freeze, clickToGo: !freeze, fullscreenControl: !freeze
+        addressControl:false, showRoadLabels:false, linksControl:true,
+        zoomControl:true, clickToGo:true, fullscreenControl:true
       });
-      if(freeze){
-        // Snap back if POV changes (prevents scroll/keyboard rotation)
-        panoRef.current.addListener('pov_changed', ()=>{
-          try{ panoRef.current.setPov({ heading:initHeadingRef.current, pitch:0 }); }catch{}
-        });
-      }
     } else {
       try{ panoRef.current.setPosition(panoLatLng); }catch{}
     }
-  },[googleReady,panoLatLng,freeze]);
-  return <div className="relative w-full h-full bg-black rounded-2xl">
-    <div ref={ref} className="absolute inset-0" />
-    {freeze && <div className="absolute inset-0" style={{pointerEvents:'auto'}} onClick={(e)=>e.preventDefault()} />}
-  </div>;
-}
-
-function GuessMap({ googleReady, guess, answer, onGuess }){
-  const ref=React.useRef(null); const mapRef=React.useRef(null); const gRef=React.useRef(null); const aRef=React.useRef(null); const lineRef=React.useRef(null);
-  React.useEffect(()=>{ if(!googleReady||!ref.current||mapRef.current) return; const google=window.google; const map=new google.maps.Map(ref.current,{center:{lat:20,lng:0},zoom:2,streetViewControl:false,mapTypeControl:false,fullscreenControl:false,gestureHandling:'greedy',mapId:MAP_ID}); mapRef.current=map; try{ const hiddenDiv=document.createElement('div'); hiddenDiv.style.width='0px'; hiddenDiv.style.height='0px'; const dummy=new google.maps.StreetViewPanorama(hiddenDiv,{visible:false}); map.setStreetView(dummy);}catch(e){} map.addListener('click',e=>onGuess&&onGuess([e.latLng.lat(),e.latLng.lng()])); },[googleReady,onGuess]);
-  React.useEffect(()=>{ const google=window.google, map=mapRef.current; if(!google||!map) return; const hasAdv=!!(google.maps.marker&&google.maps.marker.AdvancedMarkerElement);
-    if(guess){ const pos={lat:guess[0],lng:guess[1]}; if(!gRef.current){ if(hasAdv){ const el=document.createElement('div'); Object.assign(el.style,{width:'14px',height:'14px',borderRadius:'50%',background:'#22c55e',boxShadow:'0 0 0 2px rgba(34,197,94,0.35)'}); gRef.current=new google.maps.marker.AdvancedMarkerElement({map,position:pos,content:el,title:'Your guess'});} else { gRef.current=new google.maps.Marker({map,position:pos,title:'Your guess'});} } else { if(hasAdv) gRef.current.position=pos; else gRef.current.setPosition(pos);} } else if(gRef.current){ if(hasAdv) gRef.current.map=null; else gRef.current.setMap(null); gRef.current=null; }
-    if(answer){ const pos={lat:answer.lat,lng:answer.lng}; if(!aRef.current){ if(hasAdv){ const el=document.createElement('div'); Object.assign(el.style,{width:'14px',height:'14px',borderRadius:'50%',background:'#3b82f6',boxShadow:'0 0 0 2px rgba(59,130,246,0.35)'}); aRef.current=new google.maps.marker.AdvancedMarkerElement({map,position:pos,content:el,title:'Actual location'});} else { aRef.current=new google.maps.Marker({map,position:pos,title:'Actual location',icon:{path:google.maps.SymbolPath.CIRCLE,scale:6,fillColor:'#3b82f6',fillOpacity:1,strokeWeight:1}});} } else { if(hasAdv) aRef.current.position=pos; else aRef.current.setPosition(pos);} } else if(aRef.current){ if(hasAdv) aRef.current.map=null; else aRef.current.setMap(null); aRef.current=null; }
-    if(answer&&guess){ const path=[{lat:guess[0],lng:guess[1]},{lat:answer.lat,lng:answer.lng}]; if(!lineRef.current){ lineRef.current=new google.maps.Polyline({map,path,geodesic:true}); } else { lineRef.current.setPath(path); lineRef.current.setMap(map); } const b=new google.maps.LatLngBounds(); b.extend(path[0]); b.extend(path[1]); map.fitBounds(b,40);} else if(lineRef.current){ lineRef.current.setMap(null); lineRef.current=null; }
-  },[guess,answer]);
-  return <div ref={ref} className="w-full h-full bg-slate-900 rounded-2xl" />;
+  },[googleReady,panoLatLng]);
+  return <div ref={ref} className="w-full h-full bg-black rounded-2xl" />;
 }
 
 export default function Game({ user }){
@@ -112,7 +85,6 @@ export default function Game({ user }){
   const [lastResult,setLastResult]=React.useState(null);
   const [scores,setScores]=React.useState([]);
 
-  // Duplicate avoidance
   const usedPanosRef = React.useRef(new Set());
   const curatedQueue = React.useRef([]);
 
@@ -124,10 +96,11 @@ export default function Game({ user }){
 
   React.useEffect(()=>{
     if(!fbReady) return;
-    const q = query(collection(db,'scores'), orderBy('score','desc'), limit(50));
-    const unsub = onSnapshot(q, snap => setScores(snap.docs.map(d=>({id:d.id,...d.data()}))));
+    const mode = (settings.preset || 'custom').toLowerCase();
+    const qref = query(collection(db,'leaderboards', mode, 'scores'), orderBy('score','desc'), limit(50));
+    const unsub = onSnapshot(qref, snap => setScores(snap.docs.map(d=>({id:d.id,...d.data()}))));
     return ()=>unsub && unsub();
-  },[]);
+  },[settings.preset]);
 
   async function pickUnique(maxTries=8){
     const google=window.google;
@@ -136,14 +109,13 @@ export default function Game({ user }){
       const key = picked.panoId || `${picked.lat.toFixed(4)},${picked.lng.toFixed(4)}`;
       if (!usedPanosRef.current.has(key)){
         usedPanosRef.current.add(key);
-        // attach a random POV for CIA mode
-        picked.pov = { heading: Math.floor(Math.random()*360), pitch: (Math.random()*20)-10 };
+        picked.pov = { heading: Math.floor(Math.random()*360), pitch: 10 + Math.floor(Math.random()*25) };
         return picked;
       }
     }
     const fallback=await pickStreetViewLocation(window.google, settings, curatedQueue);
     usedPanosRef.current.add(fallback.panoId || `${fallback.lat.toFixed(4)},${fallback.lng.toFixed(4)}`);
-    fallback.pov = { heading: Math.floor(Math.random()*360), pitch: (Math.random()*20)-10 };
+    fallback.pov = { heading: Math.floor(Math.random()*360), pitch: 10 + Math.floor(Math.random()*25) };
     return fallback;
   }
 
@@ -167,7 +139,7 @@ export default function Game({ user }){
   }
 
   function onNext(){
-    if(round>=maxRounds){ setRound(1); setTotalScore(0); usedPanosRef.current.clear(); } // reset seen at replay
+    if(round>=maxRounds){ setRound(1); setTotalScore(0); usedPanosRef.current.clear(); }
     else { setRound(r=>r+1); }
     startNewRoundInternal();
   }
@@ -175,7 +147,13 @@ export default function Game({ user }){
   async function saveScore(){
     if(!fbReady) return alert('Firebase not configured. Provide Firebase env values.');
     if(!user) return alert('Sign in to submit your score.');
-    try{ await addDoc(collection(db,'scores'),{ username:user.displayName||user.email||'Anonymous', score:Math.round(totalScore), uid:user.uid, createdAt: serverTimestamp() }); alert('Score saved!'); }
+    const mode = (settings.preset || 'custom').toLowerCase();
+    const payload = { username:user.displayName||user.email||'Anonymous', score:Math.round(totalScore), uid:user.uid, mode, createdAt: serverTimestamp() };
+    try{
+      await addDoc(collection(db,'scores'), payload); // legacy
+      await addDoc(collection(db,'leaderboards', mode, 'scores'), payload); // per-mode
+      alert('Score saved!');
+    }
     catch(e){ console.error(e); alert('Failed to save score. Check Firestore rules.'); }
   }
 
@@ -200,7 +178,6 @@ export default function Game({ user }){
 
   return (
     <div className="flex flex-col gap-4">
-      {/* Counters row */}
       <div className="flex flex-wrap items-center justify-between rounded-2xl bg-slate-900/70 ring-1 ring-white/10 p-3">
         <div className="flex items-center gap-2">
           <span className="px-3 py-1 rounded-full bg-slate-700/70">Round {round} / {maxRounds}</span>
@@ -228,10 +205,14 @@ export default function Game({ user }){
               <div className="space-y-2"><p className="text-red-300 font-semibold">{error}</p><button onClick={startNewRoundInternal} className="px-4 py-2 bg-slate-700 rounded-xl hover:bg-slate-600" disabled={picking}>Try again</button></div>
             </div>
           )}
-          {googleReady && !loading && !error && answer && (<StreetViewPane googleReady={googleReady} panoLatLng={{ lat: answer.lat, lng: answer.lng }} freeze={freezePano} />)}
+          {googleReady && !loading && !error && answer && (
+            freezePano
+              ? <StreetViewStatic lat={answer.lat} lng={answer.lng} panoId={answer.panoId} heading={answer.pov?.heading ?? 0} pitch={answer.pov?.pitch ?? 15} />
+              : <InteractiveStreetView googleReady={googleReady} panoLatLng={{ lat: answer.lat, lng: answer.lng }} />
+          )}
         </div>
         <div className="lg:col-span-1 h-[50vh] lg:h-[70vh] rounded-2xl overflow-hidden shadow-xl ring-1 ring-white/10 bg-slate-900">
-          <GuessMap googleReady={googleReady} guess={guess} answer={reveal ? answer : null} onGuess={setGuess} />
+          <GuessMap googleReady={googleReady} guess={guess} answer={reveal ? answer : null} onGuess={setGuess} interactive={true} />
         </div>
       </div>
 

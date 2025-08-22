@@ -1,6 +1,7 @@
 import React from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useSettings } from '../ctx/SettingsContext.jsx'
+import { ready as fbReady, db, collection, query, orderBy, limit, onSnapshot } from '../firebase'
 
 const PRESETS = {
   ez:   { includeOceans: false, lowQuotaMode: true,  svAttemptBudget: 4 },
@@ -21,6 +22,14 @@ export default function Menu(){
   const nav = useNavigate();
   const { settings, setSettings } = useSettings();
   const [draft, setDraft] = React.useState(settings);
+  const [ciaTop, setCiaTop] = React.useState([]);
+
+  React.useEffect(()=>{
+    if(!fbReady) return;
+    const qref = query(collection(db, 'leaderboards', 'cia', 'scores'), orderBy('score','desc'), limit(10));
+    const unsub = onSnapshot(qref, snap => setCiaTop(snap.docs.map(d=>({id:d.id, ...d.data()}))));
+    return ()=>unsub && unsub();
+  }, []);
 
   function applyPreset(name){
     const p = PRESETS[name];
@@ -32,7 +41,6 @@ export default function Menu(){
   }
 
   function start(){
-    // force fixed backoff
     const toSave = { ...draft, svBaseBackoffMs: 2000 };
     setSettings(toSave);
     nav('/play');
@@ -50,7 +58,7 @@ export default function Menu(){
           const title = key==='cia' ? 'CIA/Rainbolt' : key[0].toUpperCase() + key.slice(1);
           const active = draft.preset === key;
           return (
-            <button key={key} onClick={()=>applyPreset(key)} className={`p-3 rounded-xl ring-1 ring-white/10 text-left transition ${active?'bg-indigo-600':'bg-slate-800/70 hover:bg-slate-700/70'}`}>
+            <button key={key} onClick={()=>applyPreset(key)} className={`p-3 rounded-xl ring-1 ring-white/10 text-left transition \${active?'bg-indigo-600':'bg-slate-800/70 hover:bg-slate-700/70'}`}>
               <div className="font-semibold">{title} <span className="opacity-90 text-xs">({MULTIPLIER_LABEL[key]})</span></div>
               <div className="text-xs opacity-80 mt-1">
                 {val.lowQuotaMode ? 'Curated SV, ' : ''}
@@ -107,6 +115,29 @@ export default function Menu(){
       <div className="flex items-center justify-between">
         <div className="text-sm opacity-75">Presets tweak the advanced options; difficulty multiplier shown in parentheses.</div>
         <button onClick={start} className="px-6 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500">Start game</button>
+      </div>
+
+      {/* CIA Leaderboard */}
+      <div className="rounded-2xl bg-slate-900/70 ring-1 ring-white/10 p-4">
+        <div className="flex items-center justify-between mb-2">
+          <h3 className="font-semibold">Top 10 — CIA/Rainbolt (Global)</h3>
+          <span className="text-xs opacity-70">{fbReady ? 'Live' : 'Offline (configure Firebase)'}</span>
+        </div>
+        <div className="overflow-auto">
+          <table className="w-full text-left text-sm">
+            <thead className="sticky top-0 bg-slate-800/80"><tr><th className="px-2 py-1">#</th><th className="px-2 py-1">User</th><th className="px-2 py-1">Score</th></tr></thead>
+            <tbody>
+              {(ciaTop || []).map((r,i)=>(
+                <tr key={r.id||i} className="odd:bg-slate-800/50">
+                  <td className="px-2 py-1">{i+1}</td>
+                  <td className="px-2 py-1">{r.username||'Unknown'}</td>
+                  <td className="px-2 py-1 font-semibold">{r.score}</td>
+                </tr>
+              ))}
+              {(!ciaTop || ciaTop.length===0) && <tr><td colSpan="3" className="px-2 py-2 opacity-70">No scores yet.</td></tr>}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   )

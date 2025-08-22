@@ -1,17 +1,39 @@
 import React from "react";
 import { ready as fbReady, auth, db, GoogleAuthProvider, signInWithPopup, updateProfile, doc, setDoc, collection, onSnapshot, query, orderBy, updateDoc, deleteDoc, serverTimestamp } from "../firebase";
 import { Link } from "react-router-dom";
+import { loadGoogleMaps } from "../lib/maps.js";
+import StreetViewStatic from "../components/StreetViewStatic.jsx";
+import GuessMap from "../components/GuessMap.jsx";
+
+const API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
 
 export default function Profile({ user }) {
   const [displayName, setDisplayName] = React.useState(user?.displayName || "");
   const [favs, setFavs] = React.useState([]);
+  const [favErr, setFavErr] = React.useState(null);
+  const [googleReady, setGoogleReady] = React.useState(false);
+  const [expanded, setExpanded] = React.useState({}); // id -> bool
+
   React.useEffect(() => { setDisplayName(user?.displayName || ""); }, [user]);
+
   React.useEffect(() => {
     if (!fbReady || !user) return;
-    const q = query(collection(db, "users", user.uid, "favourites"), orderBy("order", "asc"), orderBy("createdAt", "asc"));
-    const unsub = onSnapshot(q, (snap) => setFavs(snap.docs.map((d) => ({ id: d.id, ...d.data() }))));
+    setFavErr(null);
+    const q1 = query(collection(db, "users", user.uid, "favourites"), orderBy("order", "desc"));
+    const unsub = onSnapshot(
+      q1,
+      (snap) => { setFavErr(null); setFavs(snap.docs.map((d) => ({ id: d.id, ...d.data() }))); },
+      (err) => { console.error("Favourites onSnapshot error:", err); setFavErr(err?.message || String(err)); }
+    );
     return () => unsub && unsub();
   }, [user]);
+
+  React.useEffect(()=>{
+    (async ()=>{
+      if(!API_KEY) return;
+      try { await loadGoogleMaps(API_KEY); setGoogleReady(true); } catch(e){ console.error(e); }
+    })();
+  }, []);
 
   async function ensureSignin() {
     if (user) return true;
@@ -50,6 +72,10 @@ export default function Profile({ user }) {
     catch (e) { console.error(e); alert("Reorder failed."); }
   }
 
+  function togglePreview(id){
+    setExpanded(prev => ({ ...prev, [id]: !prev[id] }));
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -78,26 +104,52 @@ export default function Profile({ user }) {
             <h3 className="font-semibold">Your favourites</h3>
             <span className="text-xs opacity-70">{favs.length} saved</span>
           </div>
-          <div className="grid gap-2">
-            {favs.map((f) => (
-              <div key={f.id} className="flex items-center justify-between gap-3 p-2 rounded-lg bg-slate-800/60">
-                <div className="text-sm">
-                  <div className="font-medium">{f.label || "Untitled favourite"}</div>
-                  <div className="opacity-70">
-                    Ans: {f.lat?.toFixed(4)}, {f.lng?.toFixed(4)} {f.panoId ? `· ${f.panoId}` : ""}
-                    { (f.guessLat!=null && f.guessLng!=null) ? <> · Guess: {f.guessLat.toFixed(4)}, {f.guessLng.toFixed(4)}</> : null }
-                    { (f.points!=null) ? <> · {f.points} pts</> : null }
+
+          {favErr && <div className="text-red-300 text-sm mb-2">Couldn’t load favourites: {favErr}</div>}
+
+          <div className="grid gap-3">
+            {favs.map((f) => {
+              const hasGuess = (f.guessLat!=null && f.guessLng!=null);
+              return (
+                <div key={f.id} className="p-2 rounded-lg bg-slate-800/60">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="text-sm">
+                      <div className="font-medium">{f.label || "Untitled favourite"}</div>
+                      <div className="opacity-70">
+                        Ans: {f.lat?.toFixed(4)}, {f.lng?.toFixed(4)} {f.panoId ? `· ${f.panoId}` : ""}
+                        { hasGuess ? <> · Guess: {f.guessLat.toFixed(4)}, {f.guessLng.toFixed(4)}</> : null }
+                        { (f.points!=null) ? <> · {f.points} pts</> : null }
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button onClick={() => togglePreview(f.id)} className="px-2 py-1 rounded bg-emerald-700 hover:bg-emerald-600">{expanded[f.id] ? "Hide" : "Preview"}</button>
+                      <button onClick={() => moveFav(f.id, "up")} className="px-2 py-1 rounded bg-slate-700 hover:bg-slate-600" title="Move up">↑</button>
+                      <button onClick={() => moveFav(f.id, "down")} className="px-2 py-1 rounded bg-slate-700 hover:bg-slate-600" title="Move down">↓</button>
+                      <button onClick={() => renameFav(f.id, f.label || "Favourite")} className="px-2 py-1 rounded bg-slate-700 hover:bg-slate-600">Rename</button>
+                      <button onClick={() => deleteFav(f.id)} className="px-2 py-1 rounded bg-red-600 hover:bg-red-500">Delete</button>
+                    </div>
                   </div>
+
+                  {expanded[f.id] && (
+                    <div className="grid md:grid-cols-3 gap-3 mt-3">
+                      <div className="md:col-span-2 h-64 rounded-xl overflow-hidden ring-1 ring-white/10">
+                        <StreetViewStatic lat={f.lat} lng={f.lng} panoId={f.panoId || undefined} heading={0} pitch={20} />
+                      </div>
+                      <div className="md:col-span-1 h-64 rounded-xl overflow-hidden ring-1 ring-white/10 bg-slate-900">
+                        <GuessMap
+                          googleReady={googleReady}
+                          guess={hasGuess ? [f.guessLat, f.guessLng] : null}
+                          answer={{ lat: f.lat, lng: f.lng }}
+                          interactive={false}
+                          className="h-64"
+                        />
+                      </div>
+                    </div>
+                  )}
                 </div>
-                <div className="flex items-center gap-2">
-                  <button onClick={() => moveFav(f.id, "up")} className="px-2 py-1 rounded bg-slate-700 hover:bg-slate-600" title="Move up">↑</button>
-                  <button onClick={() => moveFav(f.id, "down")} className="px-2 py-1 rounded bg-slate-700 hover:bg-slate-600" title="Move down">↓</button>
-                  <button onClick={() => renameFav(f.id, f.label || "Favourite")} className="px-2 py-1 rounded bg-slate-700 hover:bg-slate-600">Rename</button>
-                  <button onClick={() => deleteFav(f.id)} className="px-2 py-1 rounded bg-red-600 hover:bg-red-500">Delete</button>
-                </div>
-              </div>
-            ))}
-            {favs.length === 0 && <div className="text-sm opacity-70">No favourites yet.</div>}
+              )
+            })}
+            {favs.length === 0 && !favErr && <div className="text-sm opacity-70">No favourites yet.</div>}
           </div>
         </div>
       )}
