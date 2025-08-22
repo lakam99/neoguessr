@@ -1,29 +1,11 @@
 import React from "react";
-import {
-  ready as fbReady,
-  auth,
-  db,
-  GoogleAuthProvider,
-  signInWithPopup,
-  updateProfile,
-  doc,
-  setDoc,
-  collection,
-  onSnapshot,
-  query,
-  orderBy,
-  updateDoc,
-  deleteDoc,
-  serverTimestamp
-} from "../firebase";
+import { ready as fbReady, auth, db, GoogleAuthProvider, signInWithPopup, updateProfile, doc, setDoc, collection, onSnapshot, query, orderBy, updateDoc, deleteDoc, serverTimestamp } from "../firebase";
 import { Link } from "react-router-dom";
 
 export default function Profile({ user }) {
   const [displayName, setDisplayName] = React.useState(user?.displayName || "");
   const [favs, setFavs] = React.useState([]);
-
   React.useEffect(() => { setDisplayName(user?.displayName || ""); }, [user]);
-
   React.useEffect(() => {
     if (!fbReady || !user) return;
     const q = query(collection(db, "users", user.uid, "favourites"), orderBy("order", "asc"), orderBy("createdAt", "asc"));
@@ -34,11 +16,8 @@ export default function Profile({ user }) {
   async function ensureSignin() {
     if (user) return true;
     if (!fbReady) { alert("Firebase not configured."); return false; }
-    try {
-      const provider = new GoogleAuthProvider();
-      await signInWithPopup(auth, provider);
-      return true;
-    } catch (e) { console.error(e); alert("Sign-in failed."); return false; }
+    try { const provider = new GoogleAuthProvider(); await signInWithPopup(auth, provider); return true; }
+    catch (e) { console.error(e); alert("Sign-in failed."); return false; }
   }
 
   async function saveDisplayName() {
@@ -67,16 +46,15 @@ export default function Profile({ user }) {
     const swapWith = direction === "up" ? idx - 1 : idx + 1;
     if (swapWith < 0 || swapWith >= favs.length) return;
     const a = favs[idx], b = favs[swapWith];
-    try {
-      await updateDoc(doc(db, "users", user.uid, "favourites", a.id), { order: (b.order ?? 0) - (direction === "up" ? 1 : -1) });
-    } catch (e) { console.error(e); alert("Reorder failed."); }
+    try { await updateDoc(doc(db, "users", user.uid, "favourites", a.id), { order: (b.order ?? 0) - (direction === "up" ? 1 : -1) }); }
+    catch (e) { console.error(e); alert("Reorder failed."); }
   }
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h2 className="text-xl font-semibold">Profile</h2>
-        <Link to="/" className="text-sm px-3 py-1 rounded-lg bg-slate-700 hover:bg-slate-600">Back to game</Link>
+        <Link to="/" className="text-sm px-3 py-1 rounded-lg bg-slate-700 hover:bg-slate-600">Back to menu</Link>
       </div>
 
       {!user ? (
