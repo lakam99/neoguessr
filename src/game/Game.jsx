@@ -1,5 +1,5 @@
 import React from "react";
-import { ready as fbReady, db, collection, addDoc, serverTimestamp, query, orderBy, limit, onSnapshot } from "../firebase";
+import { ready as fbReady, db, collection, addDoc, serverTimestamp, query, orderBy, limit, onSnapshot, doc, setDoc, increment } from "../firebase";
 import { useSettings } from "../ctx/SettingsContext.jsx";
 import { loadGoogleMaps } from "../lib/maps.js";
 import StreetViewStatic from "../components/StreetViewStatic.jsx";
@@ -148,10 +148,14 @@ export default function Game({ user }){
     if(!fbReady) return alert('Firebase not configured. Provide Firebase env values.');
     if(!user) return alert('Sign in to submit your score.');
     const mode = (settings.preset || 'custom').toLowerCase();
-    const payload = { username:user.displayName||user.email||'Anonymous', score:Math.round(totalScore), uid:user.uid, mode, createdAt: serverTimestamp() };
+    const scoreVal = Math.round(totalScore);
+    const payload = { username:user.displayName||user.email||'Anonymous', score:scoreVal, uid:user.uid, mode, createdAt: serverTimestamp() };
     try{
       await addDoc(collection(db,'scores'), payload); // legacy
       await addDoc(collection(db,'leaderboards', mode, 'scores'), payload); // per-mode
+      // Global totals (cumulative across all modes)
+      const totalsRef = doc(db, 'leaderboards', 'global', 'totals', user.uid);
+      await setDoc(totalsRef, { username: payload.username, uid: user.uid, total: increment(scoreVal), updatedAt: serverTimestamp() }, { merge: true });
       alert('Score saved!');
     }
     catch(e){ console.error(e); alert('Failed to save score. Check Firestore rules.'); }

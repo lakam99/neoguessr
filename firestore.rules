@@ -28,6 +28,29 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
+
+    // Global cumulative totals
+    match /leaderboards/global/totals/{uid} {
+      allow read: if true;
+      allow create: if request.auth != null
+        && uid == request.auth.uid
+        && request.resource.data.keys().hasOnly(['username','uid','total','updatedAt'])
+        && request.resource.data.username is string
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.total is int
+        && request.resource.data.updatedAt == request.time;
+      allow update: if request.auth != null
+        && uid == request.auth.uid
+        && request.resource.data.keys().hasOnly(['username','uid','total','updatedAt'])
+        && request.resource.data.username is string
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.total is int
+        && request.resource.data.total >= resource.data.total
+        && request.resource.data.updatedAt == request.time;
+      allow delete: if false;
+    }
+
+
     match /users/{uid} {
       allow read: if request.auth != null && request.auth.uid == uid;
       allow create, update: if request.auth != null && request.auth.uid == uid

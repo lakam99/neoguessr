@@ -23,12 +23,15 @@ export default function Menu(){
   const { settings, setSettings } = useSettings();
   const [draft, setDraft] = React.useState(settings);
   const [ciaTop, setCiaTop] = React.useState([]);
+  const [globalTop, setGlobalTop] = React.useState([]);
 
   React.useEffect(()=>{
     if(!fbReady) return;
-    const qref = query(collection(db, 'leaderboards', 'cia', 'scores'), orderBy('score','desc'), limit(10));
-    const unsub = onSnapshot(qref, snap => setCiaTop(snap.docs.map(d=>({id:d.id, ...d.data()}))));
-    return ()=>unsub && unsub();
+    const qCia = query(collection(db, 'leaderboards', 'cia', 'scores'), orderBy('score','desc'), limit(10));
+    const unsub1 = onSnapshot(qCia, snap => setCiaTop(snap.docs.map(d=>({id:d.id, ...d.data()}))));
+    const qGlobal = query(collection(db, 'leaderboards', 'global', 'totals'), orderBy('total','desc'), limit(100));
+    const unsub2 = onSnapshot(qGlobal, snap => setGlobalTop(snap.docs.map(d=>({id:d.id, ...d.data()}))));
+    return ()=>{ unsub1 && unsub1(); unsub2 && unsub2(); };
   }, []);
 
   function applyPreset(name){
@@ -58,8 +61,8 @@ export default function Menu(){
           const title = key==='cia' ? 'CIA/Rainbolt' : key[0].toUpperCase() + key.slice(1);
           const active = draft.preset === key;
           return (
-            <button key={key} onClick={()=>applyPreset(key)} className={`p-3 rounded-xl ring-1 ring-white/10 text-left transition \${active?'bg-indigo-600':'bg-slate-800/70 hover:bg-slate-700/70'}`}>
-              <div className="font-semibold">{title} <span className="opacity-90 text-xs">({MULTIPLIER_LABEL[key]})</span></div>
+            <button key={key} onClick={()=>applyPreset(key)} aria-pressed={active} className={`p-3 rounded-xl text-left transition transform ${active ? 'ring-2 ring-indigo-400 bg-indigo-600 text-white shadow-lg shadow-indigo-500/20 scale-[1.02]' : 'ring-1 ring-white/10 bg-slate-800/70 hover:bg-slate-700/70'}`}>
+              <div className="font-semibold">{title} <span className="opacity-90 text-xs">({MULTIPLIER_LABEL[key]})</span> {active && <span className="ml-2 px-2 py-0.5 rounded-full text-[10px] bg-white/20">Selected</span>}</div>
               <div className="text-xs opacity-80 mt-1">
                 {val.lowQuotaMode ? 'Curated SV, ' : ''}
                 {val.includeOceans ? 'Includes oceans, ' : 'Land‑biased, '}
@@ -117,28 +120,56 @@ export default function Menu(){
         <button onClick={start} className="px-6 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500">Start game</button>
       </div>
 
-      {/* CIA Leaderboard */}
-      <div className="rounded-2xl bg-slate-900/70 ring-1 ring-white/10 p-4">
-        <div className="flex items-center justify-between mb-2">
-          <h3 className="font-semibold">Top 10 — CIA/Rainbolt (Global)</h3>
-          <span className="text-xs opacity-70">{fbReady ? 'Live' : 'Offline (configure Firebase)'}</span>
+      
+      {/* Leaderboards */}
+      <div className="grid md:grid-cols-2 gap-4">
+        {/* CIA Top 10 */}
+        <div className="rounded-2xl bg-slate-900/70 ring-1 ring-white/10 p-4">
+          <div className="flex items-center justify-between mb-2">
+            <h3 className="font-semibold">Top 10 — CIA/Rainbolt (Global)</h3>
+            <span className="text-xs opacity-70">{fbReady ? 'Live' : 'Offline (configure Firebase)'}</span>
+          </div>
+          <div className="overflow-y-auto h-72">
+            <table className="w-full text-left text-sm">
+              <thead className="sticky top-0 bg-slate-800/80"><tr><th className="px-2 py-1">#</th><th className="px-2 py-1">User</th><th className="px-2 py-1">Score</th></tr></thead>
+              <tbody>
+                {(ciaTop || []).map((r,i)=>(
+                  <tr key={r.id||i} className="odd:bg-slate-800/50">
+                    <td className="px-2 py-1">{i+1}</td>
+                    <td className="px-2 py-1">{r.username||'Unknown'}</td>
+                    <td className="px-2 py-1 font-semibold">{r.score}</td>
+                  </tr>
+                ))}
+                {(!ciaTop || ciaTop.length===0) && <tr><td colSpan="3" className="px-2 py-2 opacity-70">No scores yet.</td></tr>}
+              </tbody>
+            </table>
+          </div>
         </div>
-        <div className="overflow-auto">
-          <table className="w-full text-left text-sm">
-            <thead className="sticky top-0 bg-slate-800/80"><tr><th className="px-2 py-1">#</th><th className="px-2 py-1">User</th><th className="px-2 py-1">Score</th></tr></thead>
-            <tbody>
-              {(ciaTop || []).map((r,i)=>(
-                <tr key={r.id||i} className="odd:bg-slate-800/50">
-                  <td className="px-2 py-1">{i+1}</td>
-                  <td className="px-2 py-1">{r.username||'Unknown'}</td>
-                  <td className="px-2 py-1 font-semibold">{r.score}</td>
-                </tr>
-              ))}
-              {(!ciaTop || ciaTop.length===0) && <tr><td colSpan="3" className="px-2 py-2 opacity-70">No scores yet.</td></tr>}
-            </tbody>
-          </table>
+
+        {/* Global cumulative Top 100 */}
+        <div className="rounded-2xl bg-slate-900/70 ring-1 ring-white/10 p-4">
+          <div className="flex items-center justify-between mb-2">
+            <h3 className="font-semibold">Top 100 — Global (All Modes, Cumulative)</h3>
+            <span className="text-xs opacity-70">{fbReady ? 'Live' : 'Offline (configure Firebase)'}</span>
+          </div>
+          <div className="overflow-y-auto h-72">
+            <table className="w-full text-left text-sm">
+              <thead className="sticky top-0 bg-slate-800/80"><tr><th className="px-2 py-1">#</th><th className="px-2 py-1">User</th><th className="px-2 py-1">Total</th></tr></thead>
+              <tbody>
+                {(globalTop || []).map((r,i)=>(
+                  <tr key={r.id||i} className="odd:bg-slate-800/50">
+                    <td className="px-2 py-1">{i+1}</td>
+                    <td className="px-2 py-1">{r.username||'Unknown'}</td>
+                    <td className="px-2 py-1 font-semibold">{r.total}</td>
+                  </tr>
+                ))}
+                {(!globalTop || globalTop.length===0) && <tr><td colSpan="3" className="px-2 py-2 opacity-70">No totals yet.</td></tr>}
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
+    
     </div>
   )
 }
