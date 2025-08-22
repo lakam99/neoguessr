@@ -5,8 +5,8 @@ import { ready as fbReady, db, collection, query, orderBy, limit, onSnapshot } f
 
 const PRESETS = {
   ez:   { includeOceans: false, lowQuotaMode: true,  svAttemptBudget: 4 },
-  // 'moderate' is now HARD per request
-  moderate:{ includeOceans: true,  lowQuotaMode: false, svAttemptBudget: 10 },
+  // Moderate is land‑biased; only Hard+ include oceans
+  moderate:{ includeOceans: false, lowQuotaMode: false, svAttemptBudget: 10 },
   hard: { includeOceans: true,  lowQuotaMode: false, svAttemptBudget: 12 },
   cia:  { includeOceans: true,  lowQuotaMode: false, svAttemptBudget: 12 },
 };
@@ -56,19 +56,29 @@ export default function Menu(){
         <p className="opacity-80">Pick your challenge, then jump in.</p>
       </div>
 
-      <div className="md:grid md:grid-cols-4 gap-3 flex gap-2 overflow-x-auto snap-x snap-mandatory py-2">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
         {Object.entries(PRESETS).map(([key, val]) => {
           const title = key==='cia' ? 'CIA/Rainbolt' : key[0].toUpperCase() + key.slice(1);
           const active = draft.preset === key;
           return (
-            <div className="snap-start min-w-[68%] sm:min-w-[48%] md:min-w-0 py-1"><button key={key} onClick={()=>applyPreset(key)} aria-pressed={active} className={`p-3 rounded-xl text-left transition transform ${active ? 'ring-2 ring-indigo-400 bg-indigo-600 text-white shadow-lg shadow-indigo-500/20 scale-[1.02]' : 'ring-1 ring-white/10 bg-slate-800/70 hover:bg-slate-700/70'}`}>
-              <div className="font-semibold">{title} <span className="opacity-90 text-xs">({MULTIPLIER_LABEL[key]})</span> {active && <span className="ml-2 px-2 py-0.5 rounded-full text-[10px] bg-white/20 text-center">Selected</span>}</div>
-              <div className="text-xs opacity-80 mt-1">
-                {val.lowQuotaMode ? 'Curated SV, ' : ''}
-                {val.includeOceans ? 'Includes oceans, ' : 'Land‑biased, '}
-                {val.svAttemptBudget} attempts
+            <button
+              key={key}
+              onClick={()=>applyPreset(key)}
+              aria-pressed={active}
+              className={`p-3 rounded-xl text-left w-full transition ${
+                active
+                  ? 'ring-2 ring-indigo-400 bg-indigo-600 text-white'
+                  : 'ring-1 ring-white/10 bg-slate-800/70 hover:bg-slate-700/70'
+              }`}
+            >
+              <div className="font-semibold">
+                {title} <span className="opacity-90 text-xs">({MULTIPLIER_LABEL[key]})</span>
+                {active && (<span className="ml-2 px-2 py-0.5 rounded-full text-[10px] bg-white/20 text-center">Selected</span>)}
               </div>
-            </button></div>
+              <div className="text-xs opacity-80 mt-1">
+                {val.lowQuotaMode ? 'Curated SV' : (val.includeOceans ? 'Includes oceans' : 'Land‑biased')}
+              </div>
+            </button>
           );
         })}
       </div>
@@ -93,29 +103,7 @@ export default function Menu(){
         </div>
       </div>
 
-      <details className="rounded-2xl bg-slate-900/70 ring-1 ring-white/10 p-4">
-        <summary className="cursor-pointer font-semibold">Advanced settings</summary>
-        <div className="grid md:grid-cols-3 gap-4 mt-3">
-          <div>
-            <label className="block mb-1 text-sm opacity-80">Street View mode</label>
-            <label className="inline-flex items-center gap-2">
-              <input type="checkbox" checked={draft.lowQuotaMode} onChange={e=>updateField('lowQuotaMode', e.target.checked)} />
-              <span>Curated (low quota / EZ)</span>
-            </label>
-          </div>
-          <div>
-            <label className="block mb-1 text-sm opacity-80">SV attempt budget</label>
-            <input type="number" min="1" max="20" value={draft.svAttemptBudget} onChange={e=>updateField('svAttemptBudget', parseInt(e.target.value||'0',10))} className="w-full px-3 py-2 rounded-lg bg-slate-800 ring-1 ring-white/10 outline-none"/>
-          </div>
-          <div>
-            <label className="block mb-1 text-sm opacity-80">SV base backoff (ms)</label>
-            <input type="number" value={2000} disabled className="w-full px-3 py-2 rounded-lg bg-slate-800 ring-1 ring-white/10 outline-none opacity-60"/>
-            <div className="text-xs opacity-70 mt-1">Fixed at 2000ms for all presets</div>
-          </div>
-        </div>
-      </details>
-
-      <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between">
         <div className="text-sm opacity-75">Presets tweak the advanced options; difficulty multiplier shown in parentheses.</div>
         <button onClick={start} className="px-6 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500">Start game</button>
       </div>

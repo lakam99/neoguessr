@@ -122,6 +122,7 @@ export default function Game({ user }){
 
   async function startNewRoundInternal(){
     if(picking) return;
+    setMobileMode('pano');
     setPicking(true); setLoading(true); setError(''); setGuess(null); setReveal(false); setLastResult(null);
     try{ const picked=await pickUnique(); setAnswer(picked); }
     catch(e){ console.error(e); setError(e.message||'Failed to pick Street View'); }
@@ -140,6 +141,7 @@ export default function Game({ user }){
   }
 
   function onNext(){
+    setMobileMode('pano');
     if(round>=maxRounds){ setRound(1); setTotalScore(0); usedPanosRef.current.clear(); }
     else { setRound(r=>r+1); }
     startNewRoundInternal();
@@ -236,11 +238,29 @@ export default function Game({ user }){
         <div className="flex items-center justify-between gap-2">
           <div className="text-sm px-3 py-2 rounded-xl bg-slate-800/80">Round {round}/{maxRounds}</div>
           {!reveal ? (
-            <button disabled={!googleReady || !answer || !guess || picking} onClick={onSubmitGuess} className="flex-1 px-4 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-600 disabled:cursor-not-allowed">Submit</button>
+            <button
+              disabled={!googleReady || !answer || !guess || picking}
+              onClick={onSubmitGuess}
+              className="flex-1 px-4 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-600 disabled:cursor-not-allowed"
+            >
+              Submit
+            </button>
           ) : (
-            <>
-              <button onClick={onNext} disabled={picking} className="flex-1 px-4 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:bg-slate-600 disabled:cursor-not-allowed">{round >= maxRounds ? 'Play again' : 'Next'}</button>
-            </>
+            <div className="flex-1 flex gap-2">
+              <button
+                onClick={saveFavourite}
+                className="flex-1 px-4 py-3 rounded-xl bg-amber-600 hover:bg-amber-500 disabled:bg-slate-600 disabled:cursor-not-allowed"
+              >
+                Save favourite
+              </button>
+              <button
+                onClick={onNext}
+                disabled={picking}
+                className="flex-1 px-4 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:bg-slate-600 disabled:cursor-not-allowed"
+              >
+                {round >= maxRounds ? 'Play again' : 'Next'}
+              </button>
+            </div>
           )}
         </div>
       </div>
