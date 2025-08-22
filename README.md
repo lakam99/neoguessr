@@ -1,27 +1,18 @@
-# WorldGuessr — Google Maps Edition
+# WorldGuessr — Google Maps + Firebase Scoreboard
 
-Full Google Maps + Street View version. Configure .env, then run.
+Full Google Maps + Street View with Firebase Auth + Firestore scoreboard.
 
 ## Setup
-1) Copy `.env.example` to `.env.local`
-2) Set `VITE_GOOGLE_MAPS_API_KEY` to your key (billing must be enabled on Google Cloud).
-3) Choose location mode:
-   - `VITE_LOCATION_MODE=random`  (worldwide Street View; we sample candidates until we find coverage)
-   - `VITE_LOCATION_MODE=country` and set `VITE_COUNTRY=Canada` (or any country name; we geocode its bounds and search within)
-
-## Run locally
+1) Copy `.env.example` → `.env.local`, fill both **Google Maps** and **Firebase** sections.
+2) In Firebase Console:
+   - Enable **Auth → Google** provider.
+   - Create **Firestore** DB and paste `firestore.rules` to Rules.
+3) Run:
 ```bash
 npm install
 npm run dev
 ```
 
-## Build & preview
-```bash
-npm run build
-npm run preview
-```
-
-## Notes
-- Random picker tries up to ~60 candidates, up to 50km radius to the nearest pano.
-- Guess map uses Google Maps; click to place your guess; after reveal the map zooms to show both points.
-- Scoring and rounds match the original.
+## Env
+- `VITE_LOCATION_MODE` = `random` or `country`
+- `VITE_COUNTRY` used only when mode=`country`

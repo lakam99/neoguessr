@@ -1,0 +1,15 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /scores/{docId} {
+      allow read: if true;  // public leaderboard
+      allow create: if request.auth != null
+                    && request.resource.data.keys().hasOnly(['username','score','uid','createdAt'])
+                    && request.resource.data.username is string
+                    && request.resource.data.score is int
+                    && request.resource.data.uid == request.auth.uid
+                    && request.resource.data.createdAt == request.time;
+      allow update, delete: if false; // immutable scores
+    }
+  }
+}
