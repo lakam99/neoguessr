@@ -187,7 +187,7 @@ export default function Game({ user }){
   const freezePano = (settings.preset||'').toLowerCase() === 'cia';
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-4 pb-28 lg:pb-0" style={{ paddingBottom: "calc(84px + env(safe-area-inset-bottom))" }}>
       <div className="flex flex-wrap items-center justify-between rounded-2xl bg-slate-900/70 ring-1 ring-white/10 p-3 text-sm lg:text-base">
         <div className="flex items-center gap-2">
           <span className="px-3 py-1 rounded-full bg-slate-700/70 text-center">Round {round} / {maxRounds}</span>
@@ -212,7 +212,7 @@ export default function Game({ user }){
       
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* Pano panel */}
-        <div className={`rounded-2xl overflow-hidden shadow-xl ring-1 ring-white/10 ${mobileMode==='pano' ? 'block' : 'hidden'} lg:block h-[58vh] lg:h-[70vh] lg:col-span-2`}>
+        <div className={`rounded-2xl shadow-xl ring-1 ring-white/10 ${mobileMode==='pano' ? 'block' : 'hidden'} lg:block h-[58vh] lg:h-[70vh] lg:col-span-2 ${freezePano ? 'overflow-y-auto' : 'overflow-hidden'}` }>
           {(!googleReady || loading) && (
             <div className="w-full h-full grid place-items-center bg-slate-900/60">
               <div className="animate-pulse text-center"><div className="text-lg">{!googleReady ? 'Loading Google Maps…' : 'Loading Street View…'}</div></div>
