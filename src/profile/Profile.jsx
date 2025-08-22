@@ -111,22 +111,22 @@ export default function Profile({ user }) {
             {favs.map((f) => {
               const hasGuess = (f.guessLat!=null && f.guessLng!=null);
               return (
-                <div key={f.id} className="p-2 rounded-lg bg-slate-800/60">
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="text-sm">
+                <div key={f.id} className="p-2 rounded-lg bg-slate-800/60 overflow-hidden">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-3">
+                    <div className="text-sm min-w-0">
                       <div className="font-medium">{f.label || "Untitled favourite"}</div>
-                      <div className="opacity-70">
-                        Ans: {f.lat?.toFixed(4)}, {f.lng?.toFixed(4)} {f.panoId ? `· ${f.panoId}` : ""}
+                      <div className="opacity-70 break-words">
+                        Ans: {f.lat?.toFixed(4)}, {f.lng?.toFixed(4)} {f.panoId ? `· ${String(f.panoId).slice(0,12)}…` : ""}
                         { hasGuess ? <> · Guess: {f.guessLat.toFixed(4)}, {f.guessLng.toFixed(4)}</> : null }
                         { (f.points!=null) ? <> · {f.points} pts</> : null }
                       </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <button onClick={() => togglePreview(f.id)} className="px-2 py-1 rounded bg-emerald-700 hover:bg-emerald-600">{expanded[f.id] ? "Hide" : "Preview"}</button>
-                      <button onClick={() => moveFav(f.id, "up")} className="px-2 py-1 rounded bg-slate-700 hover:bg-slate-600" title="Move up">↑</button>
-                      <button onClick={() => moveFav(f.id, "down")} className="px-2 py-1 rounded bg-slate-700 hover:bg-slate-600" title="Move down">↓</button>
-                      <button onClick={() => renameFav(f.id, f.label || "Favourite")} className="px-2 py-1 rounded bg-slate-700 hover:bg-slate-600">Rename</button>
-                      <button onClick={() => deleteFav(f.id)} className="px-2 py-1 rounded bg-red-600 hover:bg-red-500">Delete</button>
+                    <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 w-full sm:w-auto">
+                      <button onClick={() => togglePreview(f.id)} className="px-2 py-1 text-xs rounded bg-emerald-700 hover:bg-emerald-600">{expanded[f.id] ? "Hide" : "Preview"}</button>
+                      <button onClick={() => moveFav(f.id, "up")} className="px-2 py-1 text-xs rounded bg-slate-700 hover:bg-slate-600" title="Move up">↑</button>
+                      <button onClick={() => moveFav(f.id, "down")} className="px-2 py-1 text-xs rounded bg-slate-700 hover:bg-slate-600" title="Move down">↓</button>
+                      <button onClick={() => renameFav(f.id, f.label || "Favourite")} className="px-2 py-1 text-xs rounded bg-slate-700 hover:bg-slate-600">Rename</button>
+                      <button onClick={() => deleteFav(f.id)} className="px-2 py-1 text-xs rounded bg-red-600 hover:bg-red-500">Delete</button>
                     </div>
                   </div>
 
