@@ -1,6 +1,7 @@
 import React from "react";
 import { ready as fbReady, auth, db, GoogleAuthProvider, signInWithPopup, updateProfile, doc, setDoc, collection, onSnapshot, query, orderBy, updateDoc, deleteDoc, serverTimestamp } from "../firebase";
 import { Link } from "react-router-dom";
+import { useToast } from "../ctx/ToastContext.jsx";
 import { loadGoogleMaps } from "../lib/maps.js";
 import StreetViewStatic from "../components/StreetViewStatic.jsx";
 import GuessMap from "../components/GuessMap.jsx";
@@ -37,9 +38,9 @@ export default function Profile({ user }) {
 
   async function ensureSignin() {
     if (user) return true;
-    if (!fbReady) { alert("Firebase not configured."); return false; }
+    if (!fbReady) { toast.error('Firebase not configured.'); return false; }
     try { const provider = new GoogleAuthProvider(); await signInWithPopup(auth, provider); return true; }
-    catch (e) { console.error(e); alert("Sign-in failed."); return false; }
+    catch (e) { console.error(e); toast.error('Sign-in failed.'); return false; }
   }
 
   async function saveDisplayName() {
@@ -47,20 +48,20 @@ export default function Profile({ user }) {
     try {
       await updateProfile(auth.currentUser, { displayName: displayName || null });
       await setDoc(doc(db, "users", auth.currentUser.uid), { displayName: displayName || "", updatedAt: serverTimestamp() }, { merge: true });
-      alert("Display name updated.");
-    } catch (e) { console.error(e); alert("Failed to update display name."); }
+      toast.success('Display name updated.');
+    } catch (e) { console.error(e); toast.error('Failed to update display name.'); }
   }
 
   async function renameFav(id, current) {
     const label = prompt("New label:", current) || current;
     if (!label) return;
     try { await updateDoc(doc(db, "users", user.uid, "favourites", id), { label }); }
-    catch (e) { console.error(e); alert("Rename failed."); }
+    catch (e) { console.error(e); toast.error('Rename failed.'); }
   }
   async function deleteFav(id) {
     if (!confirm("Delete this favourite?")) return;
     try { await deleteDoc(doc(db, "users", user.uid, "favourites", id)); }
-    catch (e) { console.error(e); alert("Delete failed."); }
+    catch (e) { console.error(e); toast.error('Delete failed.'); }
   }
   async function moveFav(id, direction) {
     const idx = favs.findIndex((f) => f.id === id);
@@ -69,7 +70,7 @@ export default function Profile({ user }) {
     if (swapWith < 0 || swapWith >= favs.length) return;
     const a = favs[idx], b = favs[swapWith];
     try { await updateDoc(doc(db, "users", user.uid, "favourites", a.id), { order: (b.order ?? 0) - (direction === "up" ? 1 : -1) }); }
-    catch (e) { console.error(e); alert("Reorder failed."); }
+    catch (e) { console.error(e); toast.error('Reorder failed.'); }
   }
 
   function togglePreview(id){

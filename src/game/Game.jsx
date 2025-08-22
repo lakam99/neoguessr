@@ -1,6 +1,7 @@
 import React from "react";
 import { ready as fbReady, db, collection, addDoc, serverTimestamp, query, orderBy, limit, onSnapshot, doc, setDoc, increment } from "../firebase";
 import { useSettings } from "../ctx/SettingsContext.jsx";
+import { useToast } from "../ctx/ToastContext.jsx";
 import { loadGoogleMaps } from "../lib/maps.js";
 import StreetViewStatic from "../components/StreetViewStatic.jsx";
 import GuessMap from "../components/GuessMap.jsx";
@@ -71,6 +72,7 @@ function InteractiveStreetView({ googleReady, panoLatLng }){
 }
 
 export default function Game({ user }){
+  const { toast } = useToast();
   const { settings } = useSettings();
   const [round,setRound]=React.useState(1);
   const [maxRounds]=React.useState(5);
@@ -148,8 +150,8 @@ export default function Game({ user }){
   }
 
   async function saveScore(){
-    if(!fbReady) return alert('Firebase not configured. Provide Firebase env values.');
-    if(!user) return alert('Sign in to submit your score.');
+    if(!fbReady) return toast.error('Firebase not configured. Provide Firebase env values.');
+    if(!user) return toast.info('Sign in to submit your score.');
     const mode = (settings.preset || 'custom').toLowerCase();
     const scoreVal = Math.round(totalScore);
     const payload = { username:user.displayName||user.email||'Anonymous', score:scoreVal, uid:user.uid, mode, createdAt: serverTimestamp() };
@@ -159,16 +161,17 @@ export default function Game({ user }){
       // Global totals (cumulative across all modes)
       const totalsRef = doc(db, 'leaderboards', 'global', 'totals', user.uid);
       await setDoc(totalsRef, { username: payload.username, uid: user.uid, total: increment(scoreVal), updatedAt: serverTimestamp() }, { merge: true });
-      alert('Score saved!');
+      toast.success('Score saved!');
     }
-    catch(e){ console.error(e); alert('Failed to save score. Check Firestore rules.'); }
+    catch(e){ console.error(e); toast.error('Failed to save score. Check Firestore rules.'); }
   }
 
   async function saveFavourite(){
-    if(!fbReady) return alert('Firebase not configured.');
-    if(!user) return alert('Sign in to save favourites.');
+    if(!fbReady) return toast.error('Firebase not configured.');
+    if(!user) return toast.info('Sign in to save favourites.');
     if(!answer) return;
-    const label = prompt('Label for this favourite:', `Round ${round} — ${answer.lat.toFixed(3)}, ${answer.lng.toFixed(3)}`) || `Round ${round}`;
+    // Auto-label: "Favourite — Round X (lat,lng)"
+    const label = `Favourite — Round ${round} (${answer.lat.toFixed(3)}, ${answer.lng.toFixed(3)})`;
     try{
       await addDoc(collection(db,'users',user.uid,'favourites'),{
         lat:answer.lat, lng:answer.lng, panoId:answer.panoId||null, label, order:Date.now(),
@@ -177,8 +180,8 @@ export default function Game({ user }){
         points: lastResult ? Math.round(lastResult.points) : null,
         createdAt: serverTimestamp()
       });
-      alert('Saved to favourites!');
-    }catch(e){ console.error(e); alert('Failed to save favourite.'); }
+      toast.success('Saved to favourites!');
+    }catch(e){ console.error(e); toast.error('Failed to save favourite.'); }
   }
 
   const freezePano = (settings.preset||'').toLowerCase() === 'cia';
