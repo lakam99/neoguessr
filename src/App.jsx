@@ -13,6 +13,7 @@ const COUNTRY = import.meta.env.VITE_COUNTRY || '';
 
 // ------------------------------ Utilities ------------------------------
 const KM_PER_EARTH_RADIAN = 6371;
+const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 function deg2rad(d) { return (d * Math.PI) / 180; }
 function haversine(lat1, lon1, lat2, lon2) {
   const dLat = deg2rad(lat2 - lat1);
@@ -36,16 +37,12 @@ function loadGoogleMaps(apiKey) {
   if (typeof window === 'undefined') return Promise.reject(new Error('No window'));
   if (window.google && window.google.maps) return Promise.resolve(window.google);
   if (mapsPromise) return mapsPromise;
-  const loader = new Loader({
-    apiKey,
-    version: "weekly",
-    libraries: ["marker", "geocoding"]
-  });
+  const loader = new Loader({ apiKey, version: "weekly", libraries: ["marker","geocoding"] });
   mapsPromise = loader.load().then(() => window.google);
   return mapsPromise;
 }
 
-// ------------------------------ Street View Picker ------------------------------
+// ------------------------------ Street View Picker (throttled) ------------------------------
 function randomLatLngWorldwide() {
   const lat = (Math.random() * 140) - 70; // -70..70
   const lng = (Math.random() * 360) - 180;
@@ -104,7 +101,8 @@ const FALLBACK_SEEDS = [
 
 async function pickStreetViewLocation(google, mode, country) {
   const svRadiusSequence = [50000, 150000, 300000, 500000];
-  const maxRandomTriesPerRadius = 25;
+  const attemptsPerRadius = 6; // keep total calls smaller to avoid rate limits
+  const backoffs = [150, 300, 600, 900, 1200, 1500];
   let bounds = null;
 
   if (mode === 'country' && country) {
@@ -112,8 +110,9 @@ async function pickStreetViewLocation(google, mode, country) {
     catch (e) { console.warn('Country geocode failed, falling back to random', e); }
   }
 
+  let attempt = 0;
   for (const radius of svRadiusSequence) {
-    for (let i = 0; i < maxRandomTriesPerRadius; i++) {
+    for (let i = 0; i < attemptsPerRadius; i++) {
       const candidate = bounds ? randomLatLngInBounds(bounds) : randomLatLngWorldwide();
       try {
         const pano = await svGetPanorama(google, {
@@ -126,13 +125,17 @@ async function pickStreetViewLocation(google, mode, country) {
         const lng = pano.location.latLng.lng();
         const panoId = pano.location.pano;
         return { lat, lng, panoId };
-      } catch {}
+      } catch {
+        const delay = backoffs[Math.min(attempt, backoffs.length - 1)];
+        await sleep(delay);
+        attempt++;
+      }
     }
   }
 
-  // Fallback near popular coverage seeds
+  // Fallback near popular coverage seeds (short, with backoff)
   for (const seed of FALLBACK_SEEDS) {
-    for (const radius of [1000, 5000, 20000, 50000]) {
+    for (const radius of [1000, 5000, 20000]) {
       try {
         const pano = await svGetPanorama(google, {
           location: seed,
@@ -144,27 +147,31 @@ async function pickStreetViewLocation(google, mode, country) {
         const lng = pano.location.latLng.lng();
         const panoId = pano.location.pano;
         return { lat, lng, panoId };
-      } catch {}
+      } catch {
+        await sleep(200);
+      }
     }
   }
 
   throw new Error('Could not find a Street View location after many attempts.');
 }
 
-// ------------------------------ Street View component ------------------------------
+// ------------------------------ Street View component (reuse instance) ------------------------------
 function StreetViewPane({ googleReady, panoLatLng, onLoaded }) {
   const ref = React.useRef(null);
   const panoRef = React.useRef(null);
 
   React.useEffect(() => {
-    try {
-      if (!googleReady || !ref.current || !panoLatLng) return;
-      const google = window.google;
+    if (!googleReady || !ref.current || !panoLatLng) return;
+    const google = window.google;
+    if (!panoRef.current) {
+      // First-time create
       const pano = new google.maps.StreetViewPanorama(ref.current, {
         position: panoLatLng,
         pov: { heading: 0, pitch: 0 },
         zoom: 0,
         motionTracking: false,
+        motionTrackingControl: false,
         addressControl: false,
         showRoadLabels: false, // hide street names
         linksControl: true,
@@ -174,14 +181,16 @@ function StreetViewPane({ googleReady, panoLatLng, onLoaded }) {
       });
       panoRef.current = pano;
       onLoaded && onLoaded();
-    } catch (e) { console.error('StreetView init failed', e); }
-    return () => { panoRef.current = null; };
+    } else {
+      // Reuse instance and just move the position
+      try { panoRef.current.setPosition(panoLatLng); } catch (e) { console.warn('pano.setPosition failed', e); }
+    }
   }, [googleReady, panoLatLng, onLoaded]);
 
   return <div ref={ref} className="w-full h-full bg-black rounded-2xl" />;
 }
 
-// ------------------------------ Google Map guess component (AdvancedMarkerElement w/ fallback) ------------------------------
+// ------------------------------ Google Map guess component ------------------------------
 function GuessMap({ googleReady, guess, answer, onGuess }) {
   const ref = React.useRef(null);
   const mapRef = React.useRef(null);
@@ -291,6 +300,7 @@ export default function App() {
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState('');
   const [googleReady, setGoogleReady] = React.useState(false);
+  const [picking, setPicking] = React.useState(false); // prevent overlap
 
   const [answer, setAnswer] = React.useState(null); // {lat,lng,panoId}
   const [guess, setGuess] = React.useState(null); // [lat,lng]
@@ -328,6 +338,8 @@ export default function App() {
   }, []);
 
   async function startNewRoundInternal() {
+    if (picking) return; // guard against double clicks
+    setPicking(true);
     setLoading(true);
     setError('');
     setGuess(null);
@@ -342,6 +354,7 @@ export default function App() {
       setError(e.message || 'Failed to pick Street View');
     } finally {
       setLoading(false);
+      setPicking(false);
     }
   }
 
@@ -436,7 +449,7 @@ export default function App() {
               <div className="w-full h-full grid place-items-center p-6 text-center bg-slate-900/60">
                 <div className="space-y-2">
                   <p className="text-red-300 font-semibold">{error}</p>
-                  <button onClick={startNewRoundInternal} className="px-4 py-2 bg-slate-700 rounded-xl hover:bg-slate-600">Try again</button>
+                  <button onClick={startNewRoundInternal} className="px-4 py-2 bg-slate-700 rounded-xl hover:bg-slate-600" disabled={picking}>Try again</button>
                 </div>
               </div>
             )}
@@ -459,7 +472,7 @@ export default function App() {
           <div className="flex items-center gap-2">
             {!reveal ? (
               <button
-                disabled={!googleReady || !answer || !guess}
+                disabled={!googleReady || !answer || !guess || picking}
                 onClick={onSubmitGuess}
                 className="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-600 disabled:cursor-not-allowed"
               >
@@ -469,7 +482,8 @@ export default function App() {
               <div className="flex gap-2">
                 <button
                   onClick={onNext}
-                  className="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500"
+                  disabled={picking}
+                  className="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:bg-slate-600 disabled:cursor-not-allowed"
                 >
                   {round >= maxRounds ? 'Play again' : 'Next round'}
                 </button>

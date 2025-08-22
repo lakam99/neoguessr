@@ -1,9 +1,9 @@
-# WorldGuessr — Google Maps + Firebase (Loader build)
+# WorldGuessr — Google Maps + Firebase (Loader + Throttle)
 
-- Uses `@googlemaps/js-api-loader` to load the JS API reliably (fixes `Map is not a constructor` / race).
-- Loads libraries: `marker` and `geocoding`; AdvancedMarkerElement used when present.
-- Street View hides street names (`showRoadLabels: false`).
-- Robust Street View picking with global fallback seeds if coverage search fails.
+- Uses `@googlemaps/js-api-loader` for reliable JS API loading.
+- Throttled Street View picking with exponential backoff to avoid 429 tile limits.
+- Reuses a single `StreetViewPanorama` instance; updates position instead of remounting.
+- Hides street names in Street View (`showRoadLabels: false`).
 
 ## Setup
 1) Copy `.env.example` → `.env.local`, fill Google + Firebase values.
@@ -13,4 +13,3 @@
 npm install
 npm run dev
 ```
-
