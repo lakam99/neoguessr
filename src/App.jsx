@@ -8,6 +8,7 @@ import {
 
 // ------------------------------ ENV ------------------------------
 const API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
+const MAP_ID = import.meta.env.VITE_GOOGLE_MAPS_MAP_ID || 'DEMO_MAP_ID';
 const LOCATION_MODE = (import.meta.env.VITE_LOCATION_MODE || 'random').toLowerCase(); // 'random' | 'country'
 const COUNTRY = import.meta.env.VITE_COUNTRY || '';
 
@@ -190,7 +191,7 @@ function StreetViewPane({ googleReady, panoLatLng, onLoaded }) {
   return <div ref={ref} className="w-full h-full bg-black rounded-2xl" />;
 }
 
-// ------------------------------ Google Map guess component ------------------------------
+// ------------------------------ Google Map guess component (mapId included) ------------------------------
 function GuessMap({ googleReady, guess, answer, onGuess }) {
   const ref = React.useRef(null);
   const mapRef = React.useRef(null);
@@ -209,6 +210,7 @@ function GuessMap({ googleReady, guess, answer, onGuess }) {
         mapTypeControl: false,
         fullscreenControl: false,
         gestureHandling: 'greedy',
+        mapId: MAP_ID,
       });
       mapRef.current = map;
       map.addListener('click', (e) => {
@@ -449,7 +451,7 @@ export default function App() {
               <div className="w-full h-full grid place-items-center p-6 text-center bg-slate-900/60">
                 <div className="space-y-2">
                   <p className="text-red-300 font-semibold">{error}</p>
-                  <button onClick={startNewRoundInternal} className="px-4 py-2 bg-slate-700 rounded-xl hover:bg-slate-600" disabled={picking}>Try again</button>
+                  <button onClick={startNewRoundInternal} className="px-4 py-2 bg-slate-700 rounded-xl hover:bg-slate-600">Try again</button>
                 </div>
               </div>
             )}
@@ -472,7 +474,7 @@ export default function App() {
           <div className="flex items-center gap-2">
             {!reveal ? (
               <button
-                disabled={!googleReady || !answer || !guess || picking}
+                disabled={!googleReady || !answer || !guess || false}
                 onClick={onSubmitGuess}
                 className="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-600 disabled:cursor-not-allowed"
               >
@@ -482,8 +484,7 @@ export default function App() {
               <div className="flex gap-2">
                 <button
                   onClick={onNext}
-                  disabled={picking}
-                  className="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:bg-slate-600 disabled:cursor-not-allowed"
+                  className="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500"
                 >
                   {round >= maxRounds ? 'Play again' : 'Next round'}
                 </button>
