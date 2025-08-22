@@ -11,7 +11,23 @@ const firebaseConfig = {
   messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
   measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID,
 }
+
 const ready = Boolean(firebaseConfig.apiKey && firebaseConfig.projectId && firebaseConfig.authDomain)
 let app, auth, db
-if (ready) { app = initializeApp(firebaseConfig); auth = getAuth(app); db = getFirestore(app) }
-export { ready, app, auth, db, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged, collection, addDoc, serverTimestamp, query, orderBy, limit, onSnapshot }
+if (ready) {
+  app = initializeApp(firebaseConfig)
+  auth = getAuth(app)
+  db = getFirestore(app)
+}
+
+export {
+  ready,
+  app,
+  auth,
+  db,
+  GoogleAuthProvider,
+  signInWithPopup,
+  signOut,
+  onAuthStateChanged,
+  collection, addDoc, serverTimestamp, query, orderBy, limit, onSnapshot
+}

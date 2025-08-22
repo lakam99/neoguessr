@@ -1,18 +1,22 @@
-# WorldGuessr — Google Maps + Firebase Scoreboard
+# WorldGuessr — Google Maps + Firebase (Tailwind build)
 
-Full Google Maps + Street View with Firebase Auth + Firestore scoreboard.
+Fixes:
+- Tailwind via PostCSS (no CDN warning in prod)
+- Google Maps loader best-practices (&loading=async + importLibrary)
+- Uses AdvancedMarkerElement (no deprecation warning)
 
 ## Setup
-1) Copy `.env.example` → `.env.local`, fill both **Google Maps** and **Firebase** sections.
-2) In Firebase Console:
-   - Enable **Auth → Google** provider.
-   - Create **Firestore** DB and paste `firestore.rules` to Rules.
-3) Run:
-```bash
-npm install
-npm run dev
-```
-
-## Env
-- `VITE_LOCATION_MODE` = `random` or `country`
-- `VITE_COUNTRY` used only when mode=`country`
+1) Copy `.env.example` → `.env.local`, fill **Google Maps** and **Firebase** values.
+2) Firebase Console:
+   - Enable **Authentication → Google** provider (or the provider you plan to use).
+   - Create **Firestore**; paste `firestore.rules` and **Publish**.
+3) Install & run:
+   ```bash
+   npm install
+   npm run dev
+   ```
+4) Production build:
+   ```bash
+   npm run build
+   npm run preview
+   ```
