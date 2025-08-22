@@ -1,6 +1,6 @@
 {
   "name": "worldguessr-google-firebase",
-  "version": "1.2.0",
+  "version": "1.4.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -11,7 +11,8 @@
   "dependencies": {
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "firebase": "^10.13.0"
+    "firebase": "^10.13.0",
+    "@googlemaps/js-api-loader": "^1.16.8"
   },
   "devDependencies": {
     "vite": "^5.4.0",

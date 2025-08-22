@@ -1,6 +1,4 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
-
-/* App-specific tweaks */
 html, body, #root { height: 100%; }

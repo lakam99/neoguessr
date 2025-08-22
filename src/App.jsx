@@ -1,4 +1,5 @@
 import React from "react";
+import { Loader } from "@googlemaps/js-api-loader";
 import {
   ready as fbReady, auth, db,
   GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged,
@@ -29,24 +30,18 @@ function scoreFromDistanceKm(km) {
   return Math.max(0, Math.min(5000, s));
 }
 
-// ------------------------------ Google Maps Loader (best practice) ------------------------------
+// ------------------------------ Google Maps Loader (official) ------------------------------
 let mapsPromise = null;
 function loadGoogleMaps(apiKey) {
   if (typeof window === 'undefined') return Promise.reject(new Error('No window'));
-  if (window.google && window.google.maps && window.google.maps.importLibrary) return Promise.resolve(window.google);
+  if (window.google && window.google.maps) return Promise.resolve(window.google);
   if (mapsPromise) return mapsPromise;
-  mapsPromise = new Promise((resolve, reject) => {
-    const script = document.createElement('script');
-    // Use loading=async as recommended by Google
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(apiKey)}&v=weekly&loading=async`;
-    script.async = true;
-    script.onerror = () => reject(new Error('Failed to load Google Maps JS API'));
-    script.onload = () => {
-      if (window.google && window.google.maps) resolve(window.google);
-      else reject(new Error('Google Maps not available after load'));
-    };
-    document.head.appendChild(script);
+  const loader = new Loader({
+    apiKey,
+    version: "weekly",
+    libraries: ["marker", "geocoding"]
   });
+  mapsPromise = loader.load().then(() => window.google);
   return mapsPromise;
 }
 
@@ -58,8 +53,6 @@ function randomLatLngWorldwide() {
 }
 
 async function geocodeCountryBounds(google, countryName) {
-  // Use Geocoder from the maps library
-  await google.maps.importLibrary('geocoding');
   return new Promise((resolve, reject) => {
     const geocoder = new google.maps.Geocoder();
     geocoder.geocode({ address: countryName }, (results, status) => {
@@ -96,31 +89,65 @@ function svGetPanorama(google, options) {
   });
 }
 
+const FALLBACK_SEEDS = [
+  { lat: 48.8584, lng: 2.2945 },    // Paris
+  { lat: 51.5007, lng: -0.1246 },   // London
+  { lat: 40.6892, lng: -74.0445 },  // NYC
+  { lat: 35.6762, lng: 139.6503 },  // Tokyo
+  { lat: 34.0522, lng: -118.2437 }, // LA
+  { lat: -33.8688, lng: 151.2093 }, // Sydney
+  { lat: -23.5505, lng: -46.6333 }, // São Paulo
+  { lat: 52.5200, lng: 13.4050 },   // Berlin
+  { lat: 41.9028, lng: 12.4964 },   // Rome
+  { lat: 43.6532, lng: -79.3832 },  // Toronto
+];
+
 async function pickStreetViewLocation(google, mode, country) {
-  const maxTries = 60;
+  const svRadiusSequence = [50000, 150000, 300000, 500000];
+  const maxRandomTriesPerRadius = 25;
   let bounds = null;
+
   if (mode === 'country' && country) {
     try { bounds = await geocodeCountryBounds(google, country); }
     catch (e) { console.warn('Country geocode failed, falling back to random', e); }
   }
 
-  for (let i = 0; i < maxTries; i++) {
-    const candidate = bounds ? randomLatLngInBounds(bounds) : randomLatLngWorldwide();
-    try {
-      const pano = await svGetPanorama(google, {
-        location: candidate,
-        radius: 50000,
-        preference: google.maps.StreetViewPreference.NEAREST,
-        source: google.maps.StreetViewSource.DEFAULT,
-      });
-      const lat = pano.location.latLng.lat();
-      const lng = pano.location.latLng.lng();
-      const panoId = pano.location.pano;
-      return { lat, lng, panoId };
-    } catch (_) {
-      // try again
+  for (const radius of svRadiusSequence) {
+    for (let i = 0; i < maxRandomTriesPerRadius; i++) {
+      const candidate = bounds ? randomLatLngInBounds(bounds) : randomLatLngWorldwide();
+      try {
+        const pano = await svGetPanorama(google, {
+          location: candidate,
+          radius,
+          preference: google.maps.StreetViewPreference.NEAREST,
+          source: google.maps.StreetViewSource.DEFAULT,
+        });
+        const lat = pano.location.latLng.lat();
+        const lng = pano.location.latLng.lng();
+        const panoId = pano.location.pano;
+        return { lat, lng, panoId };
+      } catch {}
     }
   }
+
+  // Fallback near popular coverage seeds
+  for (const seed of FALLBACK_SEEDS) {
+    for (const radius of [1000, 5000, 20000, 50000]) {
+      try {
+        const pano = await svGetPanorama(google, {
+          location: seed,
+          radius,
+          preference: google.maps.StreetViewPreference.NEAREST,
+          source: google.maps.StreetViewSource.DEFAULT,
+        });
+        const lat = pano.location.latLng.lat();
+        const lng = pano.location.latLng.lng();
+        const panoId = pano.location.pano;
+        return { lat, lng, panoId };
+      } catch {}
+    }
+  }
+
   throw new Error('Could not find a Street View location after many attempts.');
 }
 
@@ -130,32 +157,31 @@ function StreetViewPane({ googleReady, panoLatLng, onLoaded }) {
   const panoRef = React.useRef(null);
 
   React.useEffect(() => {
-    (async () => {
+    try {
       if (!googleReady || !ref.current || !panoLatLng) return;
       const google = window.google;
-      await google.maps.importLibrary('streetView');
       const pano = new google.maps.StreetViewPanorama(ref.current, {
         position: panoLatLng,
         pov: { heading: 0, pitch: 0 },
         zoom: 0,
         motionTracking: false,
         addressControl: false,
-        fullscreenControl: true,
-        clickToGo: true,
-        showRoadLabels: true,
+        showRoadLabels: false, // hide street names
         linksControl: true,
         zoomControl: true,
+        clickToGo: true,
+        fullscreenControl: true,
       });
       panoRef.current = pano;
       onLoaded && onLoaded();
-    })();
+    } catch (e) { console.error('StreetView init failed', e); }
     return () => { panoRef.current = null; };
   }, [googleReady, panoLatLng, onLoaded]);
 
   return <div ref={ref} className="w-full h-full bg-black rounded-2xl" />;
 }
 
-// ------------------------------ Google Map guess component (AdvancedMarkerElement) ------------------------------
+// ------------------------------ Google Map guess component (AdvancedMarkerElement w/ fallback) ------------------------------
 function GuessMap({ googleReady, guess, answer, onGuess }) {
   const ref = React.useRef(null);
   const mapRef = React.useRef(null);
@@ -164,11 +190,10 @@ function GuessMap({ googleReady, guess, answer, onGuess }) {
   const lineRef = React.useRef(null);
 
   React.useEffect(() => {
-    (async () => {
+    try {
       if (!googleReady || !ref.current || mapRef.current) return;
       const google = window.google;
-      const { Map } = await google.maps.importLibrary('maps');
-      const map = new Map(ref.current, {
+      const map = new google.maps.Map(ref.current, {
         center: { lat: 20, lng: 0 },
         zoom: 2,
         streetViewControl: false,
@@ -181,47 +206,58 @@ function GuessMap({ googleReady, guess, answer, onGuess }) {
         const ll = { lat: e.latLng.lat(), lng: e.latLng.lng() };
         onGuess && onGuess([ll.lat, ll.lng]);
       });
-    })();
+    } catch (e) { console.error('Map init failed', e); }
   }, [googleReady, onGuess]);
 
   React.useEffect(() => {
-    (async () => {
+    try {
       const google = window.google;
       const map = mapRef.current;
       if (!google || !map) return;
-      const { AdvancedMarkerElement } = await google.maps.importLibrary('marker');
+      const hasAdvanced = !!(google.maps.marker && google.maps.marker.AdvancedMarkerElement);
 
-      // Guess marker (green dot)
+      // Guess marker
       if (guess) {
         const pos = { lat: guess[0], lng: guess[1] };
-        const el = document.createElement('div');
-        el.style.width = '14px'; el.style.height = '14px'; el.style.borderRadius = '50%';
-        el.style.background = '#22c55e'; el.style.boxShadow = '0 0 0 2px rgba(34,197,94,0.35)';
         if (!guessMarkerRef.current) {
-          guessMarkerRef.current = new AdvancedMarkerElement({ map, position: pos, content: el, title: 'Your guess' });
+          if (hasAdvanced) {
+            const el = document.createElement('div');
+            el.style.width = '14px'; el.style.height = '14px'; el.style.borderRadius = '50%';
+            el.style.background = '#22c55e'; el.style.boxShadow = '0 0 0 2px rgba(34,197,94,0.35)';
+            guessMarkerRef.current = new google.maps.marker.AdvancedMarkerElement({ map, position: pos, content: el, title: 'Your guess' });
+          } else {
+            guessMarkerRef.current = new google.maps.Marker({ map, position: pos, title: 'Your guess' });
+          }
         } else {
-          guessMarkerRef.current.position = pos;
-          guessMarkerRef.current.content = el;
+          if (hasAdvanced) { guessMarkerRef.current.position = pos; }
+          else { guessMarkerRef.current.setPosition(pos); }
         }
       } else if (guessMarkerRef.current) {
-        guessMarkerRef.current.map = null;
+        if (hasAdvanced) { guessMarkerRef.current.map = null; } else { guessMarkerRef.current.setMap(null); }
         guessMarkerRef.current = null;
       }
 
-      // Answer marker (blue dot)
+      // Answer marker
       if (answer) {
         const pos = { lat: answer.lat, lng: answer.lng };
-        const el = document.createElement('div');
-        el.style.width = '14px'; el.style.height = '14px'; el.style.borderRadius = '50%';
-        el.style.background = '#3b82f6'; el.style.boxShadow = '0 0 0 2px rgba(59,130,246,0.35)';
         if (!answerMarkerRef.current) {
-          answerMarkerRef.current = new AdvancedMarkerElement({ map, position: pos, content: el, title: 'Actual location' });
+          if (hasAdvanced) {
+            const el = document.createElement('div');
+            el.style.width = '14px'; el.style.height = '14px'; el.style.borderRadius = '50%';
+            el.style.background = '#3b82f6'; el.style.boxShadow = '0 0 0 2px rgba(59,130,246,0.35)';
+            answerMarkerRef.current = new google.maps.marker.AdvancedMarkerElement({ map, position: pos, content: el, title: 'Actual location' });
+          } else {
+            answerMarkerRef.current = new google.maps.Marker({
+              map, position: pos, title: 'Actual location',
+              icon: { path: google.maps.SymbolPath.CIRCLE, scale: 6, fillColor: '#3b82f6', fillOpacity: 1, strokeWeight: 1 }
+            });
+          }
         } else {
-          answerMarkerRef.current.position = pos;
-          answerMarkerRef.current.content = el;
+          if (hasAdvanced) { answerMarkerRef.current.position = pos; }
+          else { answerMarkerRef.current.setPosition(pos); }
         }
       } else if (answerMarkerRef.current) {
-        answerMarkerRef.current.map = null;
+        if (hasAdvanced) { answerMarkerRef.current.map = null; } else { answerMarkerRef.current.setMap(null); }
         answerMarkerRef.current = null;
       }
 
@@ -241,7 +277,7 @@ function GuessMap({ googleReady, guess, answer, onGuess }) {
         lineRef.current.setMap(null);
         lineRef.current = null;
       }
-    })();
+    } catch (e) { console.error('Marker/line update failed', e); }
   }, [guess, answer]);
 
   return <div ref={ref} className="w-full h-full bg-slate-900 rounded-2xl" />;
@@ -352,7 +388,7 @@ export default function App() {
       await signInWithPopup(auth, provider);
     } catch (e) {
       console.error(e);
-      alert('Sign-in failed. If you see auth/operation-not-allowed, enable the Google provider in Firebase Console → Authentication → Sign-in method.');
+      alert('Sign-in failed. If you see auth/operation-not-allowed, enable Google provider in Firebase Console → Authentication → Sign-in method.');
     }
   }
   async function signOutNow() {
