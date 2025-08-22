@@ -132,10 +132,10 @@ export default function Profile({ user }) {
 
                   {expanded[f.id] && (
                     <div className="grid md:grid-cols-3 gap-3 mt-3">
-                      <div className="md:col-span-2 h-64 rounded-xl overflow-hidden ring-1 ring-white/10">
+                      <div className="md:col-span-2 h-56 md:h-64 rounded-xl overflow-hidden ring-1 ring-white/10">
                         <StreetViewStatic lat={f.lat} lng={f.lng} panoId={f.panoId || undefined} heading={0} pitch={20} />
                       </div>
-                      <div className="md:col-span-1 h-64 rounded-xl overflow-hidden ring-1 ring-white/10 bg-slate-900">
+                      <div className="md:col-span-1 h-56 md:h-64 rounded-xl overflow-hidden ring-1 ring-white/10 bg-slate-900">
                         <GuessMap
                           googleReady={googleReady}
                           guess={hasGuess ? [f.guessLat, f.guessLng] : null}

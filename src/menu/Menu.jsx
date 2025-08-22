@@ -56,19 +56,19 @@ export default function Menu(){
         <p className="opacity-80">Pick your challenge, then jump in.</p>
       </div>
 
-      <div className="grid md:grid-cols-4 gap-3">
+      <div className="md:grid md:grid-cols-4 gap-3 flex gap-2 overflow-x-auto snap-x snap-mandatory pb-1">
         {Object.entries(PRESETS).map(([key, val]) => {
           const title = key==='cia' ? 'CIA/Rainbolt' : key[0].toUpperCase() + key.slice(1);
           const active = draft.preset === key;
           return (
-            <button key={key} onClick={()=>applyPreset(key)} aria-pressed={active} className={`p-3 rounded-xl text-left transition transform ${active ? 'ring-2 ring-indigo-400 bg-indigo-600 text-white shadow-lg shadow-indigo-500/20 scale-[1.02]' : 'ring-1 ring-white/10 bg-slate-800/70 hover:bg-slate-700/70'}`}>
+            <div className="snap-start min-w-[68%] sm:min-w-[48%] md:min-w-0"><button key={key} onClick={()=>applyPreset(key)} aria-pressed={active} className={`p-3 rounded-xl text-left transition transform ${active ? 'ring-2 ring-indigo-400 bg-indigo-600 text-white shadow-lg shadow-indigo-500/20 scale-[1.02]' : 'ring-1 ring-white/10 bg-slate-800/70 hover:bg-slate-700/70'}`}>
               <div className="font-semibold">{title} <span className="opacity-90 text-xs">({MULTIPLIER_LABEL[key]})</span> {active && <span className="ml-2 px-2 py-0.5 rounded-full text-[10px] bg-white/20">Selected</span>}</div>
               <div className="text-xs opacity-80 mt-1">
                 {val.lowQuotaMode ? 'Curated SV, ' : ''}
                 {val.includeOceans ? 'Includes oceans, ' : 'Land‑biased, '}
                 {val.svAttemptBudget} attempts
               </div>
-            </button>
+            </button></div>
           );
         })}
       </div>
@@ -129,7 +129,7 @@ export default function Menu(){
             <h3 className="font-semibold">Top 10 — CIA/Rainbolt (Global)</h3>
             <span className="text-xs opacity-70">{fbReady ? 'Live' : 'Offline (configure Firebase)'}</span>
           </div>
-          <div className="overflow-y-auto h-72">
+          <div className="overflow-y-auto h-56 md:h-72">
             <table className="w-full text-left text-sm">
               <thead className="sticky top-0 bg-slate-800/80"><tr><th className="px-2 py-1">#</th><th className="px-2 py-1">User</th><th className="px-2 py-1">Score</th></tr></thead>
               <tbody>
@@ -152,7 +152,7 @@ export default function Menu(){
             <h3 className="font-semibold">Top 100 — Global (All Modes, Cumulative)</h3>
             <span className="text-xs opacity-70">{fbReady ? 'Live' : 'Offline (configure Firebase)'}</span>
           </div>
-          <div className="overflow-y-auto h-72">
+          <div className="overflow-y-auto h-56 md:h-72">
             <table className="w-full text-left text-sm">
               <thead className="sticky top-0 bg-slate-800/80"><tr><th className="px-2 py-1">#</th><th className="px-2 py-1">User</th><th className="px-2 py-1">Total</th></tr></thead>
               <tbody>

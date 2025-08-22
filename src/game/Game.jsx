@@ -84,6 +84,7 @@ export default function Game({ user }){
   const [reveal,setReveal]=React.useState(false);
   const [lastResult,setLastResult]=React.useState(null);
   const [scores,setScores]=React.useState([]);
+  const [mobileMode, setMobileMode] = React.useState('pano'); // 'pano' | 'map'
 
   const usedPanosRef = React.useRef(new Set());
   const curatedQueue = React.useRef([]);
@@ -182,7 +183,7 @@ export default function Game({ user }){
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-center justify-between rounded-2xl bg-slate-900/70 ring-1 ring-white/10 p-3">
+      <div className="flex flex-wrap items-center justify-between rounded-2xl bg-slate-900/70 ring-1 ring-white/10 p-3 text-sm lg:text-base">
         <div className="flex items-center gap-2">
           <span className="px-3 py-1 rounded-full bg-slate-700/70">Round {round} / {maxRounds}</span>
           <span className="px-3 py-1 rounded-full bg-slate-700/70">Total: {Math.round(totalScore)} pts</span>
@@ -197,8 +198,16 @@ export default function Game({ user }){
         <div className="text-xs opacity-70">Preset: {settings.preset || 'custom'} · Mult: {difficultyMultiplier(settings.preset)}×</div>
       </div>
 
+      {/* Mobile view toggle */}
+      <div className="lg:hidden flex items-center justify-center gap-2">
+        <button onClick={()=>setMobileMode('pano')} className={`px-4 py-2 rounded-xl text-sm ${mobileMode==='pano' ? 'bg-indigo-600 text-white' : 'bg-slate-800/70'}`}>Photo</button>
+        <button onClick={()=>setMobileMode('map')} className={`px-4 py-2 rounded-xl text-sm ${mobileMode==='map' ? 'bg-indigo-600 text-white' : 'bg-slate-800/70'}`}>Map</button>
+      </div>
+
+      
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <div className="lg:col-span-2 h-[50vh] lg:h-[70vh] rounded-2xl overflow-hidden shadow-xl ring-1 ring-white/10">
+        {/* Pano panel */}
+        <div className={`rounded-2xl overflow-hidden shadow-xl ring-1 ring-white/10 ${mobileMode==='pano' ? 'block' : 'hidden'} lg:block h-[58vh] lg:h-[70vh] lg:col-span-2`}>
           {(!googleReady || loading) && (
             <div className="w-full h-full grid place-items-center bg-slate-900/60">
               <div className="animate-pulse text-center"><div className="text-lg">{!googleReady ? 'Loading Google Maps…' : 'Loading Street View…'}</div></div>
@@ -215,12 +224,30 @@ export default function Game({ user }){
               : <InteractiveStreetView googleReady={googleReady} panoLatLng={{ lat: answer.lat, lng: answer.lng }} />
           )}
         </div>
-        <div className="lg:col-span-1 h-[50vh] lg:h-[70vh] rounded-2xl overflow-hidden shadow-xl ring-1 ring-white/10 bg-slate-900">
+
+        {/* Map panel */}
+        <div className={`rounded-2xl overflow-hidden shadow-xl ring-1 ring-white/10 bg-slate-900 ${mobileMode==='map' ? 'block' : 'hidden'} lg:block h-[34vh] lg:h-[70vh] lg:col-span-1`}>
           <GuessMap googleReady={googleReady} guess={guess} answer={reveal ? answer : null} onGuess={setGuess} interactive={true} />
         </div>
       </div>
 
-      <div className="flex flex-col md:flex-row items-center justify-between gap-3">
+      {/* Sticky action bar on mobile */}
+      <div className="lg:hidden fixed bottom-0 left-0 right-0 z-40 p-3 pb-[calc(12px+env(safe-area-inset-bottom))] bg-gradient-to-t from-slate-950 via-slate-950/90 to-transparent">
+        <div className="flex items-center justify-between gap-2">
+          <div className="text-sm px-3 py-2 rounded-xl bg-slate-800/80">Round {round}/{maxRounds}</div>
+          {!reveal ? (
+            <button disabled={!googleReady || !answer || !guess || picking} onClick={onSubmitGuess} className="flex-1 px-4 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-600 disabled:cursor-not-allowed">Submit</button>
+          ) : (
+            <>
+              <button onClick={onNext} disabled={picking} className="flex-1 px-4 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:bg-slate-600 disabled:cursor-not-allowed">{round >= maxRounds ? 'Play again' : 'Next'}</button>
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* Desktop actions remain below */}
+      <div className="hidden lg:flex flex-col md:flex-row items-center justify-between gap-3">
+
         <div className="text-sm opacity-80">Imagery: Google Street View. Basemap: Google Maps.</div>
         <div className="flex items-center gap-2">
           {!reveal ? (
