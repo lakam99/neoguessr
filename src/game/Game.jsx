@@ -12,7 +12,18 @@ const jitter = (ms) => Math.floor(ms * (0.8 + Math.random() * 0.4));
 const deg2rad = (d) => (d * Math.PI) / 180;
 function haversine(lat1, lon1, lat2, lon2) { const dLat = deg2rad(lat2 - lat1); const dLon = deg2rad(lon2 - lon1); const a = Math.sin(dLat/2)**2 + Math.cos(deg2rad(lat1)) * Math.cos(deg2rad(lat2)) * Math.sin(Math.abs(dLon)/2)**2; return 2 * KM_PER_EARTH_RADIAN * Math.asin(Math.sqrt(a)); }
 function formatKm(km) { if (km < 1) return `${Math.round(km*1000)} m`; if (km < 100) return `${km.toFixed(1)} km`; return `${Math.round(km)} km`; }
-function scoreFromDistanceKm(km) { const s = Math.floor(5000 * Math.exp(-km / 2000)); return Math.max(0, Math.min(5000, s)); }
+function baseScoreFromDistanceKm(km) { const s = Math.floor(5000 * Math.exp(-km / 2000)); return Math.max(0, Math.min(5000, s)); }
+
+function difficultyMultiplier(preset){
+  switch((preset||'').toLowerCase()){
+    case 'ez': return 0.5;
+    case 'hard': return 1.2;
+    case 'cia': return 1.6;
+    // 'moderate' is now hard by request
+    case 'moderate': return 1.0;
+    default: return 1.0;
+  }
+}
 
 let mapsPromise = null;
 function loadGoogleMaps(apiKey) { if (typeof window === "undefined") return Promise.reject(new Error("No window")); if (window.google && window.google.maps) return Promise.resolve(window.google); if (mapsPromise) return mapsPromise; const loader = new Loader({ apiKey, version: "weekly", libraries: ["marker", "geocoding"] }); mapsPromise = loader.load().then(() => window.google); return mapsPromise; }
@@ -28,7 +39,8 @@ const CURATED=[{lat:48.85837,lng:2.294481,panoId:null},{lat:40.689247,lng:-74.04
 function shuffle(arr){ const a=[...arr]; for(let i=a.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; } return a; }
 
 async function pickStreetViewLocation(google, settings, curatedQueue){
-  const { locationMode, country, includeOceans, lowQuotaMode, svAttemptBudget, svBaseBackoffMs, svMaxRadiusM } = settings;
+  const { locationMode, country, includeOceans, lowQuotaMode, svAttemptBudget, svMaxRadiusM } = settings;
+  const svBaseBackoffMs = 2000; // fixed
   if (lowQuotaMode){
     if (curatedQueue.current.length === 0) curatedQueue.current = shuffle(CURATED);
     const seed = curatedQueue.current.shift();
@@ -42,10 +54,36 @@ async function pickStreetViewLocation(google, settings, curatedQueue){
   const seed = CURATED[Math.floor(Math.random()*CURATED.length)]; const pano = await svGetPanorama(google,{location:seed,radius:3000,preference:google.maps.StreetViewPreference.NEAREST,source:google.maps.StreetViewSource.OUTDOOR}); return { lat:pano.location.latLng.lat(), lng:pano.location.latLng.lng(), panoId:pano.location.pano };
 }
 
-function StreetViewPane({ googleReady, panoLatLng }){
+function StreetViewPane({ googleReady, panoLatLng, freeze }){
   const ref=React.useRef(null); const panoRef=React.useRef(null);
-  React.useEffect(()=>{ if(!googleReady||!ref.current||!panoLatLng) return; const google=window.google; if(!panoRef.current){ panoRef.current = new google.maps.StreetViewPanorama(ref.current,{ position:panoLatLng, pov:{heading:0,pitch:0}, zoom:0, motionTracking:false, motionTrackingControl:false, addressControl:false, showRoadLabels:false, linksControl:true, zoomControl:true, clickToGo:true, fullscreenControl:true }); } else { try{ panoRef.current.setPosition(panoLatLng); }catch{} } },[googleReady,panoLatLng]);
-  return <div ref={ref} className="w-full h-full bg-black rounded-2xl" />;
+  const initHeadingRef=React.useRef(0);
+  React.useEffect(()=>{
+    if(!googleReady||!ref.current||!panoLatLng) return;
+    const google=window.google;
+    if(!panoRef.current){
+      // CIA: pick a random heading (0-360) and tiny random pitch
+      initHeadingRef.current = Math.floor(Math.random()*360);
+      const initialPOV = { heading:initHeadingRef.current, pitch: (Math.random()*20)-10 };
+      panoRef.current = new google.maps.StreetViewPanorama(ref.current,{
+        position:panoLatLng, pov: initialPOV, zoom:0,
+        motionTracking:false, motionTrackingControl:false,
+        addressControl:false, showRoadLabels:false, linksControl: !freeze,
+        zoomControl: !freeze, clickToGo: !freeze, fullscreenControl: !freeze
+      });
+      if(freeze){
+        // Snap back if POV changes (prevents scroll/keyboard rotation)
+        panoRef.current.addListener('pov_changed', ()=>{
+          try{ panoRef.current.setPov({ heading:initHeadingRef.current, pitch:0 }); }catch{}
+        });
+      }
+    } else {
+      try{ panoRef.current.setPosition(panoLatLng); }catch{}
+    }
+  },[googleReady,panoLatLng,freeze]);
+  return <div className="relative w-full h-full bg-black rounded-2xl">
+    <div ref={ref} className="absolute inset-0" />
+    {freeze && <div className="absolute inset-0" style={{pointerEvents:'auto'}} onClick={(e)=>e.preventDefault()} />}
+  </div>;
 }
 
 function GuessMap({ googleReady, guess, answer, onGuess }){
@@ -96,19 +134,16 @@ export default function Game({ user }){
     for(let i=0;i<maxTries;i++){
       const picked=await pickStreetViewLocation(google, settings, curatedQueue);
       const key = picked.panoId || `${picked.lat.toFixed(4)},${picked.lng.toFixed(4)}`;
-      // Check if already seen (or extremely near)
-      let nearDuplicate=false;
-      for (const k of usedPanosRef.current){
-        if (k===key) { nearDuplicate=true; break; }
-      }
-      if (!nearDuplicate){
+      if (!usedPanosRef.current.has(key)){
         usedPanosRef.current.add(key);
+        // attach a random POV for CIA mode
+        picked.pov = { heading: Math.floor(Math.random()*360), pitch: (Math.random()*20)-10 };
         return picked;
       }
     }
-    // Give up and return last pick (still adds variety by queue)
     const fallback=await pickStreetViewLocation(window.google, settings, curatedQueue);
     usedPanosRef.current.add(fallback.panoId || `${fallback.lat.toFixed(4)},${fallback.lng.toFixed(4)}`);
+    fallback.pov = { heading: Math.floor(Math.random()*360), pitch: (Math.random()*20)-10 };
     return fallback;
   }
 
@@ -123,10 +158,12 @@ export default function Game({ user }){
   function onSubmitGuess(){
     if(!guess||!answer) return;
     const distanceKm=haversine(guess[0],guess[1],answer.lat,answer.lng);
-    const points=scoreFromDistanceKm(distanceKm);
+    const base=baseScoreFromDistanceKm(distanceKm);
+    const mult=difficultyMultiplier(settings.preset);
+    const points=Math.round(base*mult);
     setTotalScore(s=>s+points);
     setReveal(true);
-    setLastResult({distanceKm,points});
+    setLastResult({distanceKm,points, base, mult});
   }
 
   function onNext(){
@@ -159,18 +196,24 @@ export default function Game({ user }){
     }catch(e){ console.error(e); alert('Failed to save favourite.'); }
   }
 
+  const freezePano = (settings.preset||'').toLowerCase() === 'cia';
+
   return (
     <div className="flex flex-col gap-4">
       {/* Counters row */}
-      <div className="flex items-center justify-between rounded-2xl bg-slate-900/70 ring-1 ring-white/10 p-3">
+      <div className="flex flex-wrap items-center justify-between rounded-2xl bg-slate-900/70 ring-1 ring-white/10 p-3">
         <div className="flex items-center gap-2">
           <span className="px-3 py-1 rounded-full bg-slate-700/70">Round {round} / {maxRounds}</span>
           <span className="px-3 py-1 rounded-full bg-slate-700/70">Total: {Math.round(totalScore)} pts</span>
           {reveal && lastResult && (
-            <span className="px-3 py-1 rounded-full bg-slate-700/70">This round: {Math.round(lastResult.points)} pts · {formatKm(lastResult.distanceKm)}</span>
+            <span className="px-3 py-1 rounded-full bg-slate-700/70">
+              This round: {Math.round(lastResult.points)} pts
+              <span className="opacity-70"> (base {Math.round(lastResult.base)} × {lastResult.mult.toFixed(1)})</span>
+               · {formatKm(lastResult.distanceKm)}
+            </span>
           )}
         </div>
-        <div className="text-xs opacity-70">Settings: {settings.preset || 'custom'} · {settings.locationMode}{settings.locationMode==='country' && settings.country?` (${settings.country})`:''}</div>
+        <div className="text-xs opacity-70">Preset: {settings.preset || 'custom'} · Mult: {difficultyMultiplier(settings.preset)}×</div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
@@ -185,7 +228,7 @@ export default function Game({ user }){
               <div className="space-y-2"><p className="text-red-300 font-semibold">{error}</p><button onClick={startNewRoundInternal} className="px-4 py-2 bg-slate-700 rounded-xl hover:bg-slate-600" disabled={picking}>Try again</button></div>
             </div>
           )}
-          {googleReady && !loading && !error && answer && (<StreetViewPane googleReady={googleReady} panoLatLng={{ lat: answer.lat, lng: answer.lng }} />)}
+          {googleReady && !loading && !error && answer && (<StreetViewPane googleReady={googleReady} panoLatLng={{ lat: answer.lat, lng: answer.lng }} freeze={freezePano} />)}
         </div>
         <div className="lg:col-span-1 h-[50vh] lg:h-[70vh] rounded-2xl overflow-hidden shadow-xl ring-1 ring-white/10 bg-slate-900">
           <GuessMap googleReady={googleReady} guess={guess} answer={reveal ? answer : null} onGuess={setGuess} />

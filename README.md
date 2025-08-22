@@ -1,1 +1,1 @@
-# WorldGuessr v3.1 — Counters, duplicate‑proof curated, favourites include guess
+# WorldGuessr v3.2 — Fixed backoff, updated presets, CIA static, difficulty multipliers

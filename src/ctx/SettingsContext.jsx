@@ -5,7 +5,7 @@ export const defaultSettings = {
   includeOceans: String(import.meta.env.VITE_INCLUDE_OCEANS || 'false').toLowerCase() === 'true',
   lowQuotaMode: String(import.meta.env.VITE_LOW_QUOTA_MODE || 'false').toLowerCase() === 'true',
   svAttemptBudget: parseInt(import.meta.env.VITE_SV_ATTEMPT_BUDGET || '8', 10),
-  svBaseBackoffMs: parseInt(import.meta.env.VITE_SV_BASE_BACKOFF_MS || '900', 10),
+  svBaseBackoffMs: 2000, // Fixed regardless of preset now
   svMaxRadiusM: parseInt(import.meta.env.VITE_SV_MAX_RADIUS_M || '300000', 10),
   preset: 'custom',
 }
