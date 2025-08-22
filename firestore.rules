@@ -1,7 +1,6 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Public leaderboard: anyone can read; only authed users can create
     match /scores/{docId} {
       allow read: if true;
       allow create: if request.auth != null
@@ -12,8 +11,6 @@ service cloud.firestore {
         && request.resource.data.createdAt == request.time;
       allow update, delete: if false;
     }
-
-    // User profile and favourites (only owner access)
     match /users/{uid} {
       allow read: if request.auth != null && request.auth.uid == uid;
       allow create, update: if request.auth != null && request.auth.uid == uid
@@ -25,12 +22,16 @@ service cloud.firestore {
       match /favourites/{favId} {
         allow read: if request.auth != null && request.auth.uid == uid;
         allow create: if request.auth != null && request.auth.uid == uid
-          && request.resource.data.keys().hasOnly(['lat','lng','panoId','label','createdAt','order'])
+          && request.resource.data.keys().hasOnly(['lat','lng','panoId','label','createdAt','order','guessLat','guessLng','distanceKm','points'])
           && request.resource.data.lat is number
           && request.resource.data.lng is number
           && (request.resource.data.panoId == null || request.resource.data.panoId is string)
           && request.resource.data.label is string
           && request.resource.data.order is number
+          && (request.resource.data.guessLat == null || request.resource.data.guessLat is number)
+          && (request.resource.data.guessLng == null || request.resource.data.guessLng is number)
+          && (request.resource.data.distanceKm == null || request.resource.data.distanceKm is number)
+          && (request.resource.data.points == null || request.resource.data.points is int)
           && request.resource.data.createdAt == request.time;
         allow update: if request.auth != null && request.auth.uid == uid
           && request.resource.data.diff(resource.data).changedKeys().hasOnly(['label','order'])

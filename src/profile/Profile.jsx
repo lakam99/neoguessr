@@ -79,11 +79,15 @@ export default function Profile({ user }) {
             <span className="text-xs opacity-70">{favs.length} saved</span>
           </div>
           <div className="grid gap-2">
-            {favs.map((f, idx) => (
+            {favs.map((f) => (
               <div key={f.id} className="flex items-center justify-between gap-3 p-2 rounded-lg bg-slate-800/60">
                 <div className="text-sm">
                   <div className="font-medium">{f.label || "Untitled favourite"}</div>
-                  <div className="opacity-70">{f.lat?.toFixed(4)}, {f.lng?.toFixed(4)} {f.panoId ? `· ${f.panoId}` : ""}</div>
+                  <div className="opacity-70">
+                    Ans: {f.lat?.toFixed(4)}, {f.lng?.toFixed(4)} {f.panoId ? `· ${f.panoId}` : ""}
+                    { (f.guessLat!=null && f.guessLng!=null) ? <> · Guess: {f.guessLat.toFixed(4)}, {f.guessLng.toFixed(4)}</> : null }
+                    { (f.points!=null) ? <> · {f.points} pts</> : null }
+                  </div>
                 </div>
                 <div className="flex items-center gap-2">
                   <button onClick={() => moveFav(f.id, "up")} className="px-2 py-1 rounded bg-slate-700 hover:bg-slate-600" title="Move up">↑</button>

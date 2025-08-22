@@ -2,12 +2,14 @@ import React from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useSettings } from '../ctx/SettingsContext.jsx'
 
+const DEFAULT_BACKOFF_MS = 2000;
+
 const PRESETS = {
-  ez:   { includeOceans: false, lowQuotaMode: true,  svAttemptBudget: 4,  svBaseBackoffMs: 1200 },
-  ok:   { includeOceans: false, lowQuotaMode: false, svAttemptBudget: 6,  svBaseBackoffMs: 900 },
-  moderate:{ includeOceans: false, lowQuotaMode: false, svAttemptBudget: 8,  svBaseBackoffMs: 900 },
-  hard: { includeOceans: true,  lowQuotaMode: false, svAttemptBudget: 10, svBaseBackoffMs: 800 },
-  cia:  { includeOceans: true,  lowQuotaMode: false, svAttemptBudget: 12, svBaseBackoffMs: 700 },
+  ez:   { includeOceans: false, lowQuotaMode: true,  svAttemptBudget: 4,  svBaseBackoffMs: DEFAULT_BACKOFF_MS},
+  ok:   { includeOceans: false, lowQuotaMode: false, svAttemptBudget: 6,  svBaseBackoffMs: DEFAULT_BACKOFF_MS},
+  moderate:{ includeOceans: false, lowQuotaMode: false, svAttemptBudget: 8,  svBaseBackoffMs: DEFAULT_BACKOFF_MS },
+  hard: { includeOceans: true,  lowQuotaMode: false, svAttemptBudget: 10, svBaseBackoffMs: DEFAULT_BACKOFF_MS},
+  cia:  { includeOceans: true,  lowQuotaMode: false, svAttemptBudget: 12, svBaseBackoffMs: DEFAULT_BACKOFF_MS },
 };
 
 export default function Menu(){

@@ -25,9 +25,16 @@ function randomLatLngWorldwide(){ const lat=(Math.random()*140)-70; const lng=(M
 function svGetPanorama(google, options){ return new Promise((resolve, reject)=>{ const sv = new google.maps.StreetViewService(); sv.getPanorama(options,(data,status)=>{ if(status===google.maps.StreetViewStatus.OK && data && data.location) resolve(data); else reject(new Error('No pano')); }); }); }
 const CURATED=[{lat:48.85837,lng:2.294481,panoId:null},{lat:40.689247,lng:-74.044502,panoId:null},{lat:51.500729,lng:-0.124625,panoId:null},{lat:35.658581,lng:139.745438,panoId:null},{lat:-33.856784,lng:151.215297,panoId:null},{lat:43.642566,lng:-79.387057,panoId:null},{lat:37.8199286,lng:-122.4782551,panoId:null},{lat:41.89021,lng:12.492231,panoId:null},{lat:52.516275,lng:13.377704,panoId:null},{lat:-22.951916,lng:-43.210487,panoId:null}];
 
-async function pickStreetViewLocation(google, settings){
+function shuffle(arr){ const a=[...arr]; for(let i=a.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; } return a; }
+
+async function pickStreetViewLocation(google, settings, curatedQueue){
   const { locationMode, country, includeOceans, lowQuotaMode, svAttemptBudget, svBaseBackoffMs, svMaxRadiusM } = settings;
-  if (lowQuotaMode){ const seed = CURATED[Math.floor(Math.random()*CURATED.length)]; const pano = await svGetPanorama(google,{location:seed,radius:2000,preference:google.maps.StreetViewPreference.NEAREST,source:google.maps.StreetViewSource.OUTDOOR}); return { lat:pano.location.latLng.lat(), lng:pano.location.latLng.lng(), panoId:pano.location.pano }; }
+  if (lowQuotaMode){
+    if (curatedQueue.current.length === 0) curatedQueue.current = shuffle(CURATED);
+    const seed = curatedQueue.current.shift();
+    const pano = await svGetPanorama(google,{location:seed,radius:2000,preference:google.maps.StreetViewPreference.NEAREST,source:google.maps.StreetViewSource.OUTDOOR});
+    return { lat:pano.location.latLng.lat(), lng:pano.location.latLng.lng(), panoId:pano.location.pano };
+  }
   let bounds=null;
   if(locationMode==='country' && country){ try{ bounds=await new Promise((res,rej)=>{ const geocoder=new google.maps.Geocoder(); geocoder.geocode({address:country},(results,status)=>{ if(status==='OK'&&results&&results.length) res(results[0].geometry.viewport||results[0].geometry.bounds); else rej(new Error('Geocode failed: '+status)); }); }); }catch{ console.warn('Country geocode failed, falling back'); } }
   const radiusSeq=[20000,60000,120000,svMaxRadiusM]; const budget=Math.max(2,Math.min(20,svAttemptBudget));
@@ -67,6 +74,10 @@ export default function Game({ user }){
   const [lastResult,setLastResult]=React.useState(null);
   const [scores,setScores]=React.useState([]);
 
+  // Duplicate avoidance
+  const usedPanosRef = React.useRef(new Set());
+  const curatedQueue = React.useRef([]);
+
   React.useEffect(()=>{ (async()=>{
     try{ if(!API_KEY) throw new Error('Missing VITE_GOOGLE_MAPS_API_KEY in .env'); await loadGoogleMaps(API_KEY); setGoogleReady(true); await startNewRoundInternal(); }
     catch(e){ console.error(e); setError(e.message||'Failed to initialize Google Maps'); }
@@ -80,10 +91,31 @@ export default function Game({ user }){
     return ()=>unsub && unsub();
   },[]);
 
+  async function pickUnique(maxTries=8){
+    const google=window.google;
+    for(let i=0;i<maxTries;i++){
+      const picked=await pickStreetViewLocation(google, settings, curatedQueue);
+      const key = picked.panoId || `${picked.lat.toFixed(4)},${picked.lng.toFixed(4)}`;
+      // Check if already seen (or extremely near)
+      let nearDuplicate=false;
+      for (const k of usedPanosRef.current){
+        if (k===key) { nearDuplicate=true; break; }
+      }
+      if (!nearDuplicate){
+        usedPanosRef.current.add(key);
+        return picked;
+      }
+    }
+    // Give up and return last pick (still adds variety by queue)
+    const fallback=await pickStreetViewLocation(window.google, settings, curatedQueue);
+    usedPanosRef.current.add(fallback.panoId || `${fallback.lat.toFixed(4)},${fallback.lng.toFixed(4)}`);
+    return fallback;
+  }
+
   async function startNewRoundInternal(){
     if(picking) return;
     setPicking(true); setLoading(true); setError(''); setGuess(null); setReveal(false); setLastResult(null);
-    try{ const google=window.google; const picked=await pickStreetViewLocation(google, settings); setAnswer(picked); }
+    try{ const picked=await pickUnique(); setAnswer(picked); }
     catch(e){ console.error(e); setError(e.message||'Failed to pick Street View'); }
     finally{ setLoading(false); setPicking(false); }
   }
@@ -98,7 +130,7 @@ export default function Game({ user }){
   }
 
   function onNext(){
-    if(round>=maxRounds){ setRound(1); setTotalScore(0); }
+    if(round>=maxRounds){ setRound(1); setTotalScore(0); usedPanosRef.current.clear(); } // reset seen at replay
     else { setRound(r=>r+1); }
     startNewRoundInternal();
   }
@@ -115,12 +147,32 @@ export default function Game({ user }){
     if(!user) return alert('Sign in to save favourites.');
     if(!answer) return;
     const label = prompt('Label for this favourite:', `Round ${round} — ${answer.lat.toFixed(3)}, ${answer.lng.toFixed(3)}`) || `Round ${round}`;
-    try{ await addDoc(collection(db,'users',user.uid,'favourites'),{ lat:answer.lat, lng:answer.lng, panoId:answer.panoId||null, label, order:Date.now(), createdAt: serverTimestamp() }); alert('Saved to favourites!'); }
-    catch(e){ console.error(e); alert('Failed to save favourite.'); }
+    try{
+      await addDoc(collection(db,'users',user.uid,'favourites'),{
+        lat:answer.lat, lng:answer.lng, panoId:answer.panoId||null, label, order:Date.now(),
+        guessLat: guess ? guess[0] : null, guessLng: guess ? guess[1] : null,
+        distanceKm: lastResult ? Number(lastResult.distanceKm.toFixed(3)) : null,
+        points: lastResult ? Math.round(lastResult.points) : null,
+        createdAt: serverTimestamp()
+      });
+      alert('Saved to favourites!');
+    }catch(e){ console.error(e); alert('Failed to save favourite.'); }
   }
 
   return (
     <div className="flex flex-col gap-4">
+      {/* Counters row */}
+      <div className="flex items-center justify-between rounded-2xl bg-slate-900/70 ring-1 ring-white/10 p-3">
+        <div className="flex items-center gap-2">
+          <span className="px-3 py-1 rounded-full bg-slate-700/70">Round {round} / {maxRounds}</span>
+          <span className="px-3 py-1 rounded-full bg-slate-700/70">Total: {Math.round(totalScore)} pts</span>
+          {reveal && lastResult && (
+            <span className="px-3 py-1 rounded-full bg-slate-700/70">This round: {Math.round(lastResult.points)} pts · {formatKm(lastResult.distanceKm)}</span>
+          )}
+        </div>
+        <div className="text-xs opacity-70">Settings: {settings.preset || 'custom'} · {settings.locationMode}{settings.locationMode==='country' && settings.country?` (${settings.country})`:''}</div>
+      </div>
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <div className="lg:col-span-2 h-[50vh] lg:h-[70vh] rounded-2xl overflow-hidden shadow-xl ring-1 ring-white/10">
           {(!googleReady || loading) && (
