@@ -31,11 +31,26 @@ export default function CampaignGame(){
   const [lastResult, setLastResult] = React.useState(null);
   const [totalScore, setTotalScore] = React.useState(0);
   const [freezePano] = React.useState(true); // campaign uses stills like CIA
+  const [googleReady, setGoogleReady] = React.useState(false);
 
   const uid = auth && auth.currentUser ? auth.currentUser.uid : null;
 
   
+  
   React.useEffect(()=>{
+    let mounted = true;
+    (async () => {
+      try{
+        if(API_KEY){
+          await loadGoogleMaps(API_KEY);
+          if(mounted) setGoogleReady(true);
+        }
+      }catch(e){ /* ignore for now */ }
+    })();
+    return ()=>{ mounted = false; };
+  }, []);
+
+React.useEffect(()=>{
     let cancelled = false;
     async function init(){
       try {
@@ -87,8 +102,8 @@ export default function CampaignGame(){
 
   function onGuessCommit(){
     if(!guess){ toast.info("Place a guess on the map first."); return; }
-    const answer = { lat: stage.lat, lng: stage.lng };
-    const dist = distanceKm(guess, answer);
+    const answer = { lat: stage.lat, lng: stage.lng }; const guessPt = guess ? { lat: guess[0], lng: guess[1] } : null;
+    const dist = guessPt ? distanceKm(guessPt, answer) : Infinity;
     const thresholds = stage.thresholdKm || [1000,500];
     const passed = dist <= thresholds[0];
     const bonus = dist <= thresholds[1] ? 1.2 : 1.0;
@@ -165,17 +180,11 @@ export default function CampaignGame(){
           </div>
         </div>
         <div className="rounded-xl overflow-hidden ring-1 ring-white/10 bg-slate-900/30" style={{ minHeight: 320 }}>
-          <GuessMap
-            onGuess={(latlng)=> setGuess(latlng)}
-            reveal={reveal}
-            answer={reveal ? { lat: stage.lat, lng: stage.lng } : null}
-            guess={guess}
-            onReset={()=>{ setGuess(null); setReveal(false); setLastResult(null); }}
-          />
+                    <GuessMap googleReady={googleReady} guess={guess} answer={reveal ? { lat: stage.lat, lng: stage.lng } : null} onGuess={(arr)=> setGuess(arr)} interactive={true} />
           <div className="p-2 flex items-center justify-between">
-            <span className="text-sm opacity-80">{ guess ? `Your guess: ${guess.lat.toFixed(3)}, ${guess.lng.toFixed(3)}` : "Tap the map to place your guess." }</span>
+            <span className="text-sm opacity-80">{ Array.isArray(guess) ? `Your guess: ${guess[0].toFixed(3)}, ${guess[1].toFixed(3)}` : "Tap the map to place your guess." }</span>
             {!reveal ? (
-              <button onClick={onGuessCommit} className="px-3 py-1 rounded bg-indigo-600 hover:bg-indigo-500 text-white">Make Guess</button>
+              <button disabled={!googleReady || !stage || !guess} onClick={onGuessCommit} className="px-3 py-1 rounded bg-indigo-600 hover:bg-indigo-500 text-white">Make Guess</button>
             ) : (
               <div className="flex items-center gap-2">
                 <button onClick={()=>{ setReveal(false); }} className="px-3 py-1 rounded bg-slate-700 hover:bg-slate-600">Adjust Guess</button>

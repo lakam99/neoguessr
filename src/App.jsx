@@ -84,6 +84,7 @@ export default function App() {
             <Route path="/" element={<Menu />} />
             <Route path="/play" element={<Game user={user} />} />
             <Route path="/profile" element={<Profile user={user} />} />
+            } />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </div>
