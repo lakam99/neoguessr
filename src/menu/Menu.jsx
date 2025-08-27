@@ -50,6 +50,7 @@ export default function Menu(){
   }
 
   return (
+
     <div className="space-y-6">
       <div className="text-center">
         <h1 className="text-3xl font-bold">WorldGuessr</h1>
@@ -61,6 +62,7 @@ export default function Menu(){
           const title = key==='cia' ? 'CIA/Rainbolt' : key[0].toUpperCase() + key.slice(1);
           const active = draft.preset === key;
           return (
+
             <button
               key={key}
               onClick={()=>applyPreset(key)}

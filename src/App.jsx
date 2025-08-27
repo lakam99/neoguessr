@@ -1,8 +1,9 @@
 import React from "react";
-import { Routes, Route, Link, Navigate } from "react-router-dom";
+import { Routes, Route, Link, Navigate, useLocation } from "react-router-dom";
 import Game from "./game/Game.jsx";
 import Profile from "./profile/Profile.jsx";
 import Menu from "./menu/Menu.jsx";
+import CampaignGame from "./campaign/CampaignGame.jsx";
 import { ready as fbReady, auth, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signOut } from "./firebase";
 import { SettingsContext, defaultSettings } from "./ctx/SettingsContext.jsx";
 
@@ -11,10 +12,22 @@ function TopNav({ user, onSignIn, onSignOut }) {
     <header className="flex flex-wrap items-center justify-between gap-2 mb-4">
       <div className="flex items-center gap-3">
         <Link to="/" className="text-2xl md:text-3xl font-bold tracking-tight">WorldGuessr — Google</Link>
-        <nav className="flex items-center gap-2 text-sm">
-          <Link to="/" className="px-3 py-1 rounded-full bg-slate-700/60 hover:bg-slate-600">Menu</Link>
-          <Link to="/play" className="px-3 py-1 rounded-full bg-slate-700/60 hover:bg-slate-600">Play</Link>
-          <Link to="/profile" className="px-3 py-1 rounded-full bg-slate-700/60 hover:bg-slate-600">Profile</Link>
+                <nav className="flex items-center gap-2 text-sm">
+          {(() => {
+            const { pathname } = useLocation();
+            const navClass = (path) => {
+              const active = path === '/' ? pathname === '/' : pathname.startsWith(path);
+              return `px-3 py-1 rounded-full ${active ? 'bg-indigo-600/70' : 'bg-slate-700/60 hover:bg-slate-600'}`;
+            };
+            return (
+              <>
+                <Link to="/" className={navClass('/')}>Menu</Link>
+                <Link to="/play" className={navClass('/play')}>Play</Link>
+                <Link to="/campaign" className={navClass('/campaign')}>Campaign</Link>
+                <Link to="/profile" className={navClass('/profile')}>Profile</Link>
+              </>
+            );
+          })()}
         </nav>
       </div>
       <div className="flex items-center gap-2">
@@ -68,6 +81,7 @@ export default function App() {
             <Route path="/" element={<Menu />} />
             <Route path="/play" element={<Game user={user} />} />
             <Route path="/profile" element={<Profile user={user} />} />
+            <Route path="/campaign/*" element={<CampaignGame user={user} />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </div>
