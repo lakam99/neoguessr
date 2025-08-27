@@ -195,7 +195,39 @@ React.useEffect(()=>{
         </div>
       </div>
 
-      <div className="fixed lg:static bottom-0 left-0 right-0 z-40 lg:z-10 bg-slate-900/70 ring-1 ring-white/10">
+      
+      {/* Sticky action bar on mobile */}
+      <div className="lg:hidden fixed bottom-0 left-0 right-0 z-40 p-3 pt-8 bg-gradient-to-t from-slate-950 via-slate-950/90 to-transparent">
+        <div className="flex items-center justify-between gap-2">
+          <div className="text-sm px-3 py-2 rounded-xl bg-slate-800/80">Stage {stageIndex+1}/{maxStages}</div>
+          {!reveal ? (
+            <button
+              disabled={!googleReady || !stage || !guess}
+              onClick={onGuessCommit}
+              className="flex-1 px-4 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white disabled:bg-slate-600 disabled:cursor-not-allowed"
+            >
+              Submit
+            </button>
+          ) : (
+            <div className="flex-1 flex gap-2">
+              <button
+                onClick={()=>{ setReveal(false); }}
+                className="flex-1 px-4 py-3 rounded-xl bg-slate-700 hover:bg-slate-600 text-white"
+              >
+                Adjust
+              </button>
+              <button
+                onClick={onNext}
+                className="flex-1 px-4 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white"
+              >
+                Next
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+
+<div className="fixed lg:static bottom-0 left-0 right-0 z-40 lg:z-10 bg-slate-900/70 ring-1 ring-white/10">
         <div className="max-w-6xl mx-auto p-3 flex items-center justify-between gap-2">
           <div className="text-xs opacity-70">
             {(!fbReady || !uid) ? "Sign in to save progress + leaderboards." : "Progress auto-saves."}

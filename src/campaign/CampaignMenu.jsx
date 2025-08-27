@@ -1,6 +1,6 @@
 import React from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { ready as fbReady, auth, db, collection, addDoc, serverTimestamp, query, orderBy, onSnapshot, doc, setDoc } from "../firebase";
+import { ready as fbReady, auth, db, collection, addDoc, serverTimestamp, query, orderBy, onSnapshot, doc, setDoc, updateDoc, deleteDoc } from "../firebase";
 import { getDoc } from "firebase/firestore";
 import { useToast } from "../ctx/ToastContext.jsx";
 import { loadGoogleMaps } from "../lib/maps.js";
@@ -16,6 +16,7 @@ export default function CampaignMenu(){
   const [myCases, setMyCases] = React.useState([]);
   const [leader, setLeader] = React.useState([]);
   const [creating, setCreating] = React.useState(false);
+  const [difficulty, setDifficulty] = React.useState('standard');
   const [progress, setProgress] = React.useState({ pct: 0, note: "" });
   const [error, setError] = React.useState("");
 
@@ -32,7 +33,25 @@ export default function CampaignMenu(){
     const unsub2 = onSnapshot(qLead, snap => {
       setLeader(snap.docs.map(d=>({ id: d.id, ...d.data() })));
     });
-    return ()=>{ unsub1 && unsub1(); unsub2 && unsub2(); };
+  
+  async function renameCampaign(id){
+    const name = prompt("Rename campaign to:");
+    if(!name) return;
+    try{
+      await updateDoc(doc(db, 'campaigns', uid, 'cases', id), { title: name, updatedAt: serverTimestamp() });
+      toast.success("Renamed.");
+    }catch(e){ toast.error("Rename failed."); }
+  }
+
+  async function deleteCampaign(id){
+    if(!confirm("Delete this campaign? This cannot be undone.")) return;
+    try{
+      await deleteDoc(doc(db, 'campaigns', uid, 'cases', id));
+      toast.success("Deleted.");
+    }catch(e){ toast.error("Delete failed."); }
+  }
+
+  return ()=>{ unsub1 && unsub1(); unsub2 && unsub2(); };
   }, [fbReady, uid]);
 
   const myTotal = React.useMemo(()=>{
@@ -41,6 +60,20 @@ export default function CampaignMenu(){
   }, [leader, uid]);
 
   const myRank = rankFor(myTotal);
+  const nextRank = React.useMemo(()=>{
+    const idx = RANKS.findIndex(r => r.title === myRank.title);
+    return idx >= 0 && idx < RANKS.length - 1 ? RANKS[idx+1] : null;
+  }, [myRank]);
+
+  const rankProgress = React.useMemo(()=>{
+    const curMin = myRank.min || 0;
+    const nextMin = nextRank ? nextRank.min : Math.max(curMin, myTotal);
+    const span = Math.max(1, nextMin - curMin);
+    const val = Math.min(span, Math.max(0, (myTotal - curMin)));
+    const pct = Math.round((val / span) * 100);
+    return { curMin, nextMin, val, span, pct };
+  }, [myRank, nextRank, myTotal]);
+
 
   async function createCampaign(){
     if (!API_KEY){ toast.error("Missing Google Maps API key."); return; }
@@ -76,7 +109,14 @@ export default function CampaignMenu(){
       const target = await pickTarget();
 
       setProgress({ pct: 10, note: "Building rings…" });
-      const generated = await generateCampaignFromTarget(API_KEY, { lat: target.lat, lng: target.lng }, {
+      const presets = {
+        easy: { radii: [800, 300, 80, 8], attemptsPerRing: 2, svMaxRadiusM: 15000 },
+        standard: { radii: [1000, 500, 100, 10], attemptsPerRing: 4, svMaxRadiusM: 20000 },
+        hard: { radii: [1200, 700, 150, 12], attemptsPerRing: 5, svMaxRadiusM: 25000 },
+        cia: { radii: [1500, 900, 180, 12], attemptsPerRing: 6, svMaxRadiusM: 30000 }
+      };
+      const cfg = presets[difficulty] || presets.standard;
+      const generated = await generateCampaignFromTarget(API_KEY, { lat: target.lat, lng: target.lng }, { ...cfg,
         attemptsPerRing: 4,
         svMaxRadiusM: 20000,
         throttleMs: Number(import.meta.env.VITE_SV_THROTTLE_MS||900),
@@ -84,7 +124,7 @@ export default function CampaignMenu(){
       });
 
       const dref = doc(collection(db, 'campaigns', uid, 'cases'));
-      const payload = {
+      const payload = { difficulty, 
         title: "Procedural Case",
         description: "A dynamically generated hunt that narrows in stages.",
         target: generated.target,
@@ -116,16 +156,39 @@ export default function CampaignMenu(){
           <div className="text-lg font-semibold">Campaign Mode</div>
           <div className="text-sm opacity-80">Ranks & leaderboards</div>
         </div>
-        <div className="flex items-center gap-2">
-          <span className="px-3 py-1 rounded-full bg-indigo-600/70">{myRank.title}</span>
-          <span className="px-3 py-1 rounded-full bg-slate-700/70">Total: {myTotal}</span>
+
+        <div className="flex flex-col items-end gap-2 min-w-[200px]">
+          <div className="flex items-center gap-2">
+            <span className="px-3 py-1 rounded-full bg-indigo-600/70">{myRank.title}</span>
+            <span className="px-3 py-1 rounded-full bg-slate-700/70">Total: {myTotal}</span>
+          </div>
+          {nextRank && (
+            <div className="w-64">
+              <div className="text-xs opacity-80 mb-1">Progress to {nextRank.title}: {rankProgress.val} / {rankProgress.span} ({rankProgress.pct}%)</div>
+              <div className="h-2 rounded bg-slate-800 overflow-hidden ring-1 ring-white/10">
+                <div className="h-full bg-indigo-600" style={{ width: `${rankProgress.pct}%` }} />
+              </div>
+            </div>
+          )}
         </div>
+
       </div>
 
       <div className="grid md:grid-cols-3 gap-4">
         <div className="md:col-span-2 space-y-4">
           <div className="rounded-xl ring-1 ring-white/10 bg-slate-900/50">
             <div className="p-3 border-b border-white/10 flex items-center justify-between">
+              
+            <div className="flex items-center gap-2">
+              <label className="text-sm opacity-80">Difficulty:</label>
+              <select value={difficulty} onChange={e=>setDifficulty(e.target.value)} className="px-2 py-1 rounded bg-slate-800 ring-1 ring-white/10">
+                <option value="easy">Trainee (Easy)</option>
+                <option value="standard">Operative (Standard)</option>
+                <option value="hard">Insurgent (Hard)</option>
+                <option value="cia">Black Ops (CIA)</option>
+              </select>
+            </div>
+
               <div className="font-semibold">Your Campaigns</div>
               <button onClick={createCampaign} disabled={creating || !uid} className="px-3 py-1 rounded bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50">
                 {creating ? "Creating…" : "Create New Campaign"}
@@ -148,6 +211,8 @@ export default function CampaignMenu(){
                   </div>
                   <div className="flex items-center gap-2">
                     <Link to={`/campaign/play/${cs.id}`} className="px-3 py-1 rounded bg-indigo-600 hover:bg-indigo-500 text-white">Play</Link>
+                    <button onClick={()=>renameCampaign(cs.id)} className="px-3 py-1 rounded bg-slate-700 hover:bg-slate-600">Rename</button>
+                    <button onClick={()=>deleteCampaign(cs.id)} className="px-3 py-1 rounded bg-red-600 hover:bg-red-500 text-white">Delete</button>
                   </div>
                 </div>
               ))}
