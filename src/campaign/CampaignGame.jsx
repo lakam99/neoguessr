@@ -1,5 +1,5 @@
 import React from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, Link } from "react-router-dom";
 import { ready as fbReady, auth, db, collection, addDoc, serverTimestamp, doc, setDoc, updateDoc, increment } from "../firebase";
 import { getDoc } from 'firebase/firestore';
 import { useToast } from "../ctx/ToastContext.jsx";
@@ -34,20 +34,19 @@ export default function CampaignGame(){
 
   const uid = auth && auth.currentUser ? auth.currentUser.uid : null;
 
+  
   React.useEffect(()=>{
     let cancelled = false;
     async function init(){
       try {
         if(!API_KEY){ setLoading(false); return; }
-
-        // If there is an existing case doc, load it; else generate a new one from target
         if (uid && caseId){
           const dref = doc(db, 'campaigns', uid, 'cases', caseId);
           const snap = await getDoc(dref);
           if(snap.exists()){
             const data = snap.data();
             if(!cancelled){
-              setCampaign(data);
+              setCampaign({ ...data, id: dref.id });
               setStageIndex(data.progress || 0);
               setTotalScore(data.score || 0);
               setLoading(false);
@@ -55,70 +54,11 @@ export default function CampaignGame(){
             return;
           }
         }
-
-        // Create a fresh campaign
-        const google = await loadGoogleMaps(API_KEY);
-        // Pick a valid Street View target first by sampling near random land-biased boxes
-        // We'll sample a few random points and take the first pano we can resolve
-        async function pickTarget(){
-          // Use Game.jsx logic approximated: land-biased boxes
-          const LAND_BOXES = [[7,-168,70,-52],[-56,-82,13,-34],[35,-10,71,40],[-35,-75,-10,-34],[12,-17,37,57],[-34,17,6,51],[-35,50,-12,84],[24,60,55,150],[12,26,42,60],[-44,112,-10,154],[-47,166,-34,179]];
-          function randomLand(){ const b = LAND_BOXES[Math.floor(Math.random()*LAND_BOXES.length)]; return { lat: (Math.random()*(b[2]-b[0]))+b[0], lng: (Math.random()*(b[3]-b[1]))+b[1] }; }
-          async function svGet(options){
-            return new Promise((resolve,reject)=>{
-              const sv = new google.maps.StreetViewService();
-              sv.getPanorama(options,(data,status)=>{
-                if(status===google.maps.StreetViewStatus.OK && data && data.location) resolve(data);
-                else reject(new Error('No pano'));
-              });
-            });
-          }
-          for(let attempts=0; attempts<20; attempts++){
-            const seed = randomLand();
-            try{
-              const p = await svGet({ location: seed, radius: 5000, preference: google.maps.StreetViewPreference.NEAREST, source: google.maps.StreetViewSource.OUTDOOR });
-              return { lat: p.location.latLng.lat(), lng: p.location.latLng.lng(), panoId: p.location.pano };
-            }catch(e){ /* try again */ }
-          }
-          // fallback: near Equator
-          return { lat: 0, lng: 0, panoId: null };
-        }
-        const target = await pickTarget();
-        const generated = await generateCampaignFromTarget(API_KEY, { lat: target.lat, lng: target.lng });
-
-        const newCase = {
-          title: "Procedural Case",
-          description: "A dynamically generated hunt that narrows on a hidden target.",
-          target: generated.target,
-          stages: generated.stages,
-          progress: 0,
-          score: 0,
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
-        };
-
-        if(uid){
-          // allocate a case id if not provided
-          const dref = caseId ? doc(db, 'campaigns', uid, 'cases', caseId) : doc(collection(db, 'campaigns', uid, 'cases'));
-          await setDoc(dref, newCase);
-          if(!cancelled){
-            setCampaign({ ...newCase, id: dref.id });
-            setStageIndex(0);
-            setTotalScore(0);
-            setLoading(false);
-          }
-        }else{
-          // Not signed in: keep it in memory only
-          if(!cancelled){
-            setCampaign({ ...newCase, id: "local" });
-            setStageIndex(0);
-            setTotalScore(0);
-            setLoading(false);
-          }
-        }
+        // No existing case found -> go to menu
+        setLoading(false);
       } catch (e){
         console.error(e);
-        toast.error("Failed to initialize campaign.");
+        toast.error("Failed to load campaign.");
         setLoading(false);
       }
     }
@@ -126,8 +66,9 @@ export default function CampaignGame(){
     return ()=>{ cancelled = true; };
   }, [uid, caseId]);
 
+
   if (loading) return <div className="p-6">Preparing case... | Initializing case...</div>;
-  if (!campaign) return <div className="p-6">No campaign available.</div>;
+  if (!campaign) return <div className="p-6">No campaign found. Create one in <Link to="/campaign" className="underline">Campaign Menu</Link>.</div>;
 
   const stage = campaign.stages[stageIndex];
   const maxStages = campaign.stages.length;

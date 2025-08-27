@@ -4,6 +4,7 @@ import Game from "./game/Game.jsx";
 import Profile from "./profile/Profile.jsx";
 import Menu from "./menu/Menu.jsx";
 import CampaignGame from "./campaign/CampaignGame.jsx";
+import CampaignMenu from "./campaign/CampaignMenu.jsx";
 import { ready as fbReady, auth, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signOut } from "./firebase";
 import { SettingsContext, defaultSettings } from "./ctx/SettingsContext.jsx";
 
@@ -78,10 +79,11 @@ export default function App() {
         <div className="max-w-7xl mx-auto">
           <TopNav user={user} onSignIn={onSignIn} onSignOut={onSignOut} />
           <Routes>
+          <Route path="/campaign" element={<CampaignMenu/>} />
+          <Route path="/campaign/play/:caseId" element={<CampaignGame/>} />
             <Route path="/" element={<Menu />} />
             <Route path="/play" element={<Game user={user} />} />
             <Route path="/profile" element={<Profile user={user} />} />
-            <Route path="/campaign/*" element={<CampaignGame user={user} />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </div>

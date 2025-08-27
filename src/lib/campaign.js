@@ -47,19 +47,28 @@ export async function generateCampaignFromTarget(apiKey, target, options={}){
     "Excellent work so far. The net is closing. Show us how close you can get to the target.",
     "Final approach. Get within 5–10 km to close the case."
   ];
+  const svMaxRadiusM = options.svMaxRadiusM || 30000; // keep modest search radius
+  const attemptsPerRing = options.attemptsPerRing || 4;
+  const throttleMs = options.throttleMs || Number(import.meta.env.VITE_SV_THROTTLE_MS||900);
+  const onProgress = typeof options.onProgress === 'function' ? options.onProgress : ()=>{};
 
-  const svMaxRadiusM = options.svMaxRadiusM || 300000; // generous search radius for pano
+  const sleep = (ms)=> new Promise(r=>setTimeout(r, ms));
+
+  const totalSteps = radii.length * attemptsPerRing + 2; // rough estimate
+  let doneSteps = 0;
+  const progress = (note)=>{ doneSteps++; const pct = Math.min(100, Math.round((doneSteps/totalSteps)*100)); onProgress({ pct, note }); };
+
   const stages = [];
-  for (let i=0; i<radii.length; i++){ 
+  progress("Initializing…");
+
+  for (let i=0; i<radii.length; i++){
     const d = radii[i];
-    let attempt = 0, pano=null;
-    // try up to N jittered bearings for a panorama near this ring
-    while(attempt < 10 && !pano){
-      attempt++;
+    let pano=null;
+    for (let attempt=0; attempt<attemptsPerRing && !pano; attempt++){
       const bearing = Math.random()*360;
       const pt = offsetLatLng(target.lat, target.lng, d, bearing);
-      try{ 
-        const p = await svGetPanorama(google, { location: pt, radius: Math.min(5000, svMaxRadiusM), preference: google.maps.StreetViewPreference.NEAREST, source: google.maps.StreetViewSource.OUTDOOR });
+      try{
+        const p = await svGetPanorama(google, { location: pt, radius: svMaxRadiusM, preference: google.maps.StreetViewPreference.NEAREST, source: google.maps.StreetViewSource.OUTDOOR });
         pano = p;
         stages.push({
           order: i+1,
@@ -69,9 +78,12 @@ export async function generateCampaignFromTarget(apiKey, target, options={}){
           thresholdKm: DEFAULT_THRESHOLDS[i] || [10,5],
           text: stageTexts[i] || stageTexts[stageTexts.length-1]
         });
-      }catch(e){ /* retry */ }
+        progress(`Ring ${i+1}: panorama found`);
+      }catch(e){
+        progress(`Ring ${i+1}: searching…`);
+      }
+      await sleep(throttleMs);
     }
-    // If we couldn't find a pano for this ring, fallback to the ring coordinate; StreetViewStatic will use lat/lng
     if(!pano){
       const bearing = Math.random()*360;
       const pt = offsetLatLng(target.lat, target.lng, d, bearing);
@@ -82,22 +94,23 @@ export async function generateCampaignFromTarget(apiKey, target, options={}){
         thresholdKm: DEFAULT_THRESHOLDS[i] || [10,5],
         text: stageTexts[i] || stageTexts[stageTexts.length-1]
       });
+      progress(`Ring ${i+1}: fallback point`);
+      await sleep(throttleMs);
     }
   }
 
-  // Add final target stage as a reveal photo (exact location)
   stages.push({
     order: radii.length+1,
     lat: target.lat, lng: target.lng,
-    panoId: null, // allow static by lat/lng
-    thresholdKm: [5, 0], // finish when <= 5km (inner bound)
+    panoId: null,
+    thresholdKm: [5, 0],
     text: "Target confirmed. Close the case."
   });
+  progress("Finalizing…");
 
   return {
     target,
     stages
   };
 }
-
 export function distanceKm(a, b){ return haversine(a.lat, a.lng, b.lat, b.lng); }
