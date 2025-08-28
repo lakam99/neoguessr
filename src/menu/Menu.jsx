@@ -1,7 +1,7 @@
 import React from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useSettings } from '../ctx/SettingsContext.jsx'
-import { ready as fbReady, auth, db, collection, query, orderBy, limit, onSnapshot } from '../firebase'
+import { ready as fbReady, db, collection, query, orderBy, limit, onSnapshot } from '../firebase'
 
 const PRESETS = {
   ez:   { includeOceans: false, lowQuotaMode: true,  svAttemptBudget: 4 },
@@ -24,8 +24,6 @@ export default function Menu(){
   const [draft, setDraft] = React.useState(settings);
   const [ciaTop, setCiaTop] = React.useState([]);
   const [globalTop, setGlobalTop] = React.useState([]);
-  const [lastCampaign, setLastCampaign] = React.useState(null);
-  const uid = auth?.currentUser?.uid || null;
 
   React.useEffect(()=>{
     if(!fbReady) return;
@@ -34,17 +32,7 @@ export default function Menu(){
     const qGlobal = query(collection(db, 'leaderboards', 'global', 'totals'), orderBy('total','desc'), limit(100));
     const unsub2 = onSnapshot(qGlobal, snap => setGlobalTop(snap.docs.map(d=>({id:d.id, ...d.data()}))));
     return ()=>{ unsub1 && unsub1(); unsub2 && unsub2(); };
-  },
-  React.useEffect(()=>{
-    if(!fbReady || !uid) return;
-    const qLast = query(collection(db, 'campaigns', uid, 'cases'), orderBy('updatedAt','desc'), limit(1));
-    const unsub = onSnapshot(qLast, snap => {
-      const docs = snap.docs.map(d=>({ id: d.id, ...d.data() }));
-      setLastCampaign(docs[0] || null);
-    });
-    return ()=>{ unsub && unsub(); };
-  }, [fbReady, uid])
-);
+  }, []);
 
   function applyPreset(name){
     const p = PRESETS[name];
@@ -62,21 +50,7 @@ export default function Menu(){
   }
 
   return (
-
     <div className="space-y-6">
-      {lastCampaign && (
-        <div className="p-4 rounded-xl ring-1 ring-white/10 bg-slate-900/60 flex items-center justify-between">
-          <div>
-            <div className="text-lg font-semibold">Continue Campaign</div>
-            <div className="text-sm opacity-80">"{lastCampaign.title || 'Procedural Case'}" · Stage {(lastCampaign.progress||0)+1} / {lastCampaign.stages?.length||'?'}</div>
-          </div>
-          <div className="flex items-center gap-2">
-            <button onClick={()=>nav(`/campaign/play/${lastCampaign.id}`)} className="px-3 py-1 rounded bg-indigo-600 hover:bg-indigo-500 text-white">Resume</button>
-            <button onClick={()=>nav('/campaign')} className="px-3 py-1 rounded bg-slate-700 hover:bg-slate-600">Campaign Menu</button>
-          </div>
-        </div>
-      )}
-
       <div className="text-center">
         <h1 className="text-3xl font-bold">WorldGuessr</h1>
         <p className="opacity-80">Pick your challenge, then jump in.</p>
@@ -87,7 +61,6 @@ export default function Menu(){
           const title = key==='cia' ? 'CIA/Rainbolt' : key[0].toUpperCase() + key.slice(1);
           const active = draft.preset === key;
           return (
-
             <button
               key={key}
               onClick={()=>applyPreset(key)}

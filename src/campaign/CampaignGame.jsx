@@ -168,7 +168,19 @@ React.useEffect(()=>{
                · {formatKm(lastResult.distanceKm)}
             </span>
           )}
+        
+        {/* header action buttons (desktop) */}
+        <div className="hidden lg:flex items-center gap-2">
+          {!reveal ? (
+            <button disabled={!googleReady || !stage || !guess} onClick={onGuessCommit} className="px-3 py-1 rounded bg-emerald-600 hover:bg-emerald-500 text-white disabled:bg-slate-600 disabled:cursor-not-allowed">Submit</button>
+          ) : (
+            <div className="flex items-center gap-2">
+              <button onClick={()=>{ setReveal(false); }} className="px-3 py-1 rounded bg-slate-700 hover:bg-slate-600">Adjust</button>
+              <button onClick={onNext} className="px-3 py-1 rounded bg-emerald-600 hover:bg-emerald-500 text-white">Next</button>
+            </div>
+          )}
         </div>
+    </div>
         <div className="text-xs opacity-70">Campaign Mode · Still photos only</div>
       </div>
 
@@ -184,11 +196,11 @@ React.useEffect(()=>{
           <div className="p-2 flex items-center justify-between">
             <span className="text-sm opacity-80">{ Array.isArray(guess) ? `Your guess: ${guess[0].toFixed(3)}, ${guess[1].toFixed(3)}` : "Tap the map to place your guess." }</span>
             {!reveal ? (
-              <button disabled={!googleReady || !stage || !guess} onClick={onGuessCommit} className="px-3 py-1 rounded bg-indigo-600 hover:bg-indigo-500 text-white">Make Guess</button>
+              <button disabled={!googleReady || !stage || !guess} onClick={onGuessCommit} className="px-3 py-1 rounded bg-indigo-600 hover:bg-indigo-500 text-white">Submit</button>
             ) : (
               <div className="flex items-center gap-2">
-                <button onClick={()=>{ setReveal(false); }} className="px-3 py-1 rounded bg-slate-700 hover:bg-slate-600">Adjust Guess</button>
-                <button onClick={onNext} className="px-3 py-1 rounded bg-emerald-600 hover:bg-emerald-500 text-white">Next Clue</button>
+                <button onClick={()=>{ setReveal(false); }} className="px-3 py-1 rounded bg-slate-700 hover:bg-slate-600">Adjust</button>
+                <button onClick={onNext} className="px-3 py-1 rounded bg-emerald-600 hover:bg-emerald-500 text-white">Next</button>
               </div>
             )}
           </div>
