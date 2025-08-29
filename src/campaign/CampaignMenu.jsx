@@ -17,7 +17,7 @@ import {
 } from "../firebase";
 import { useToast } from "../ctx/ToastContext.jsx";
 import { loadGoogleMaps } from "../lib/maps.js";
-import { generateCampaignFromTarget } from "../lib/campaign.js";
+import { generateBackwardTrail } from "../lib/campaign.js";
 import { RANKS, rankFor, groupByRank } from "../lib/ranks.js";
 
 const API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
@@ -113,70 +113,43 @@ export default function CampaignMenu() {
     try {
       const google = await loadGoogleMaps(API_KEY);
       const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-      const LAND_BOXES = [[7, -168, 70, -52], [-56, -82, 13, -34], [35, -10, 71, 40], [-35, -75, -10, -34], [12, -17, 37, 57], [-34, 17, 6, 51], [-35, 50, -12, 84], [24, 60, 55, 150], [12, 26, 42, 60], [-44, 112, -10, 154], [-47, 166, -34, 179]];
 
-      async function svGet(options) {
-        return new Promise((resolve, reject) => {
-          const sv = new google.maps.StreetViewService();
-          sv.getPanorama(options, (data, status) => {
-            if (status === google.maps.StreetViewStatus.OK && data && data.location) resolve(data);
-            else reject(new Error("No pano"));
-          });
-        });
-      }
-      async function pickTarget() {
-        setProgress({ pct: 5, note: "Selecting target…" });
-        for (let attempts = 0; attempts < 20; attempts++) {
-          const b = LAND_BOXES[Math.floor(Math.random() * LAND_BOXES.length)];
-          const seed = { lat: Math.random() * (b[2] - b[0]) + b[0], lng: Math.random() * (b[3] - b[1]) + b[1] };
-          try {
-            const p = await svGet({ location: seed, radius: 5000, preference: google.maps.StreetViewPreference.NEAREST, source: google.maps.StreetViewSource.OUTDOOR });
-            return { lat: p.location.latLng.lat(), lng: p.location.latLng.lng(), panoId: p.location.pano };
-          } catch (e) {
-            await sleep(Number(import.meta.env.VITE_SV_THROTTLE_MS || 900));
-          }
-        }
-        return { lat: 0, lng: 0, panoId: null };
-      }
-
-      const target = await pickTarget();
-      setProgress({ pct: 10, note: "Building rings…" });
-
+      // Difficulty presets: number of stages (including final target) and reveal radii
       const presets = {
-        easy: { radii: [800, 300, 80, 8], attemptsPerRing: 2, svMaxRadiusM: 15000 },
-        standard: { radii: [1000, 500, 100, 10], attemptsPerRing: 4, svMaxRadiusM: 20000 },
-        hard: { radii: [1200, 700, 150, 12], attemptsPerRing: 5, svMaxRadiusM: 25000 },
-        cia: { radii: [1500, 900, 180, 12], attemptsPerRing: 6, svMaxRadiusM: 30000 },
+        easy:   { distances: [0, 50, 500, 1500], radii: [1500, 600, 120, 8] },
+        standard:{ distances: [0, 50, 400, 1200, 2500], radii: [2000, 800, 200, 60, 8] },
+        hard:   { distances: [0, 30, 200, 800, 2000, 3500], radii: [2500, 1000, 300, 120, 40, 8] },
       };
-      const cfg = presets[difficulty] || presets.standard;
+      const preset = presets[difficulty] || presets.standard;
 
-      const generated = await generateCampaignFromTarget(API_KEY, { lat: target.lat, lng: target.lng }, {
-        ...cfg,
-        throttleMs: Number(import.meta.env.VITE_SV_THROTTLE_MS || 900),
-        onProgress: (p) => setProgress(p),
-      });
+      const { target, stages } = await generateBackwardTrail(
+        google,
+        { distancesKm: preset.distances, throttleMs: 300, radiiForRevealKm: preset.radii },
+        (p) => setProgress(p)
+      );
 
-      const payload = {
-        difficulty,
-        title: "Procedural Case",
-        description: "A dynamically generated hunt that narrows in stages.",
-        target: generated.target,
-        stages: generated.stages,
-        progress: 0,
-        score: 0,
+      setProgress({ pct: 92, note: "Saving campaign…" });
+      const docPayload = {
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
+        uid,
+        difficulty,
+        score: 0,
+        progress: 0,
+        target,
+        stages,
       };
 
-      const dref = await addDoc(collection(db, "campaigns", uid, "cases"), payload);
-      setProgress({ pct: 100, note: "Done!" });
-      notify('success', "Campaign created.");
+      const dref = await addDoc(collection(db, "campaigns", uid, "cases"), docPayload);
+
+      setProgress({ pct: 100, note: "Done" });
+      await sleep(400);
+      setCreating(false);
       navigate(`/campaign/play/${dref.id}`);
     } catch (e) {
       console.error(e);
-      notify('error', "Campaign creation failed.");
-    } finally {
-      setTimeout(() => setCreating(false), 400);
+      setCreating(false);
+      notify('error', "Failed to create campaign. Try again.");
     }
   }
 
