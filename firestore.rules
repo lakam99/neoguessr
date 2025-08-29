@@ -28,6 +28,7 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
+
     // Global cumulative totals
     match /leaderboards/global/totals/{uid} {
       allow read: if true;
@@ -49,41 +50,7 @@ service cloud.firestore {
       allow delete: if false;
     }
 
-    // Campaign leaderboards — totals (cumulative points per user)
-    match /leaderboards/campaign/totals/{uid} {
-      allow read: if true;
-      allow create: if request.auth != null
-        && uid == request.auth.uid
-        && request.resource.data.keys().hasOnly(['username','uid','total','updatedAt'])
-        && request.resource.data.username is string
-        && request.resource.data.uid == request.auth.uid
-        && request.resource.data.total is int
-        && request.resource.data.updatedAt == request.time;
-      allow update: if request.auth != null
-        && uid == request.auth.uid
-        && request.resource.data.keys().hasOnly(['username','uid','total','updatedAt'])
-        && request.resource.data.username is string
-        && request.resource.data.uid == request.auth.uid
-        && request.resource.data.total is int
-        && request.resource.data.total >= resource.data.total
-        && request.resource.data.updatedAt == request.time;
-      allow delete: if false;
-    }
 
-    // Campaign leaderboards — individual case scores
-    match /leaderboards/campaign/scores/{id} {
-      allow read: if true;
-      allow create: if request.auth != null
-        && request.resource.data.keys().hasOnly(['username','score','uid','createdAt','caseId'])
-        && request.resource.data.username is string
-        && request.resource.data.score is int
-        && request.resource.data.uid == request.auth.uid
-        && request.resource.data.caseId is string
-        && request.resource.data.createdAt == request.time;
-      allow update, delete: if false;
-    }
-
-    // Per-user documents
     match /users/{uid} {
       allow read: if request.auth != null && request.auth.uid == uid;
       allow create, update: if request.auth != null && request.auth.uid == uid
@@ -112,14 +79,6 @@ service cloud.firestore {
           && request.resource.data.order is number;
         allow delete: if request.auth != null && request.auth.uid == uid;
       }
-    }
-
-    // Campaign cases (stored under root collection "campaigns/{uid}/cases/{caseId}")
-    match /campaigns/{uid}/cases/{caseId} {
-      allow read: if request.auth != null && request.auth.uid == uid;
-      allow create: if request.auth != null && request.auth.uid == uid;
-      allow update: if request.auth != null && request.auth.uid == uid;
-      allow delete: if false;
     }
   }
 }

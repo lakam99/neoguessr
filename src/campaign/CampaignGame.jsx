@@ -9,6 +9,7 @@ import HeaderBar from "../components/play/HeaderBar.jsx";
 import StreetViewPanel from "../components/play/StreetViewPanel.jsx";
 import MapPanel from "../components/play/MapPanel.jsx";
 import StickyActionBar from "../components/play/StickyActionBar.jsx";
+import PlayScreen from "../components/play/PlayScreen.jsx";
 import MobileToggle from "../components/play/MobileToggle.jsx";
 import DesktopActionRow from "../components/play/DesktopActionRow.jsx";
 import PanoPanel from "../components/play/PanoPanel.jsx";
@@ -114,47 +115,30 @@ export default function CampaignGame(){
   }
 
   return (
-    <div className="flex flex-col gap-4 pb-28 lg:pb-0" style={{ paddingBottom: "calc(84px + env(safe-area-inset-bottom))" }}>
-      <HeaderBar
-        leftBadges={[`Stage ${stageIndex+1}/${maxStages}`, `Total: ${Math.round(totalScore)} pts`].concat(reveal && lastResult ? [`This stage: ${Math.round(lastResult.points)} pts · ${Math.round(lastResult.distanceKm)} km`] : [])}
-      />
-
-      {/* Mobile view toggle */}
-      <MobileToggle mode={mobileMode} onChange={setMobileMode} />
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <StreetViewPanel
-          text={stage.text || "Investigate the photo and make your best guess."}
-          lat={stage.lat}
-          lng={stage.lng}
-          panoId={stage.panoId}
-        />
-        <MapPanel
-          googleReady={googleReady}
-          guess={guess}
-          answer={answer}
-          onGuess={(arr)=> setGuess(arr)}
-          reveal={reveal}
-          onSubmit={onSubmit}
-          onAdjust={()=>{}}
-          onNext={onNext}
-          onSaveFavourite={saveFavourite}
-          picking={picking}
-          showSaveFavourite={true}
-        />
-      </div>
-
-      {/* Sticky action bar on mobile */}
-      <StickyActionBar
-        leftLabel={`Stage ${stageIndex+1}/${maxStages}`}
+    
+      <PlayScreen
+        label="Stage"
+        index={stageIndex+1}
+        max={maxStages}
+        totalScore={totalScore}
         reveal={reveal}
-        disabled={!googleReady || !answer || !guess || picking}
-        onSubmit={onSubmit}
-        onSaveFavourite={saveFavourite}
-        onNext={onNext}
+        lastResult={lastResult}
+        googleReady={googleReady}
+        loading={loading}
+        error={null}
+        freezePano={true}
+        answer={answer}
+        text={stage?.text || "Investigate the photo and make your best guess."}
+        guess={guess}
+        onGuess={(arr)=> setGuess(arr)}
         picking={picking}
-        showSaveFavourite={true}
+        onSubmit={onSubmit}
+        onNext={onNext}
+        onSaveFavourite={saveFavourite}
+        showSaveScore={false}
+        nextLabel={stageIndex >= maxStages-1 ? 'Finish campaign' : 'Next stage'}
+        mobileMode={mobileMode}
+        setMobileMode={setMobileMode}
       />
-    </div>
-  );
+);
 }
