@@ -20,7 +20,7 @@ function TopNav({ user, onSignIn, onSignOut }) {
     <header className="flex flex-wrap items-center justify-between gap-2 mb-4">
       <div className="flex items-center gap-3">
         <Link to="/" className="text-2xl md:text-3xl font-bold tracking-tight">
-          WorldGuessr — Google
+          WorldGuessr
         </Link>
         <nav className="flex items-center gap-2 text-sm">
           <Link to="/" className="px-3 py-1 rounded-full bg-slate-700/60 hover:bg-slate-600">Menu</Link>
