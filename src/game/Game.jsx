@@ -5,6 +5,14 @@ import { useToast } from "../ctx/ToastContext.jsx";
 import { loadGoogleMaps } from "../lib/maps.js";
 import StreetViewStatic from "../components/StreetViewStatic.jsx";
 import GuessMap from "../components/GuessMap.jsx";
+import HeaderBar from "../components/play/HeaderBar.jsx";
+import StreetViewPanel from "../components/play/StreetViewPanel.jsx";
+import MapPanel from "../components/play/MapPanel.jsx";
+import StickyActionBar from "../components/play/StickyActionBar.jsx";
+import InteractiveStreetView from "../components/play/InteractiveStreetView.jsx";
+import MobileToggle from "../components/play/MobileToggle.jsx";
+import DesktopActionRow from "../components/play/DesktopActionRow.jsx";
+import PanoPanel from "../components/play/PanoPanel.jsx";
 
 const API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
 
@@ -50,25 +58,6 @@ async function pickStreetViewLocation(google, settings, curatedQueue){
   const radiusSeq=[20000,60000,120000,svMaxRadiusM]; const budget=Math.max(2,Math.min(20,svAttemptBudget));
   for(let i=0;i<budget;i++){ const candidate = bounds ? (()=>{ const sw=bounds.getSouthWest(); const ne=bounds.getNorthEast(); return {lat:rndBetween(sw.lat(),ne.lat()), lng:rndBetween(sw.lng(),ne.lng())}; })() : (includeOceans? randomLatLngWorldwide(): randomLatLngLandBiased()); try{ const pano=await svGetPanorama(google,{location:candidate,radius:radiusSeq[Math.min(i,radiusSeq.length-1)],preference:google.maps.StreetViewPreference.NEAREST,source:google.maps.StreetViewSource.OUTDOOR}); return { lat:pano.location.latLng.lat(), lng:pano.location.latLng.lng(), panoId:pano.location.pano }; }catch{ await sleep(jitter(svBaseBackoffMs)); } }
   const seed = CURATED[Math.floor(Math.random()*CURATED.length)]; const pano = await svGetPanorama(google,{location:seed,radius:3000,preference:google.maps.StreetViewPreference.NEAREST,source:google.maps.StreetViewSource.OUTDOOR}); return { lat:pano.location.latLng.lat(), lng:pano.location.latLng.lng(), panoId:pano.location.pano };
-}
-
-function InteractiveStreetView({ googleReady, panoLatLng }){
-  const ref=React.useRef(null); const panoRef=React.useRef(null);
-  React.useEffect(()=>{
-    if(!googleReady||!ref.current||!panoLatLng) return;
-    const google=window.google;
-    if(!panoRef.current){
-      panoRef.current = new google.maps.StreetViewPanorama(ref.current,{
-        position:panoLatLng, pov: { heading:0, pitch:0 }, zoom:0,
-        motionTracking:false, motionTrackingControl:false,
-        addressControl:false, showRoadLabels:false, linksControl:true,
-        zoomControl:true, clickToGo:true, fullscreenControl:true
-      });
-    } else {
-      try{ panoRef.current.setPosition(panoLatLng); }catch{}
-    }
-  },[googleReady,panoLatLng]);
-  return <div ref={ref} className="w-full h-full bg-black rounded-2xl" />;
 }
 
 export default function Game({ user }){
@@ -187,103 +176,59 @@ export default function Game({ user }){
   const freezePano = (settings.preset||'').toLowerCase() === 'cia';
 
   return (
-    <div className="flex flex-col gap-4 pb-28 lg:pb-0" style={{ paddingBottom: "calc(84px + env(safe-area-inset-bottom))" }}>
-      <div className="flex flex-wrap items-center justify-between rounded-2xl bg-slate-900/70 ring-1 ring-white/10 p-3 text-sm lg:text-base">
-        <div className="flex items-center gap-2">
-          <span className="px-3 py-1 rounded-full bg-slate-700/70 text-center">Round {round} / {maxRounds}</span>
-          <span className="px-3 py-1 rounded-full bg-slate-700/70 text-center">Total: {Math.round(totalScore)} pts</span>
-          {reveal && lastResult && (
-            <span className="px-3 py-1 rounded-full bg-slate-700/70 text-center">
-              This round: {Math.round(lastResult.points)} pts
-              <span className="opacity-70"> (base {Math.round(lastResult.base)} × {lastResult.mult.toFixed(1)})</span>
-               · {formatKm(lastResult.distanceKm)}
-            </span>
-          )}
-        </div>
-        <div className="text-xs opacity-70">Preset: {settings.preset || 'custom'} · Mult: {difficultyMultiplier(settings.preset)}×</div>
-      </div>
+    
+<div className="flex flex-col gap-4 pb-28 lg:pb-0" style={{ paddingBottom: "calc(84px + env(safe-area-inset-bottom))" }}>
+  <HeaderBar leftBadges={[`Round ${round}/${maxRounds}`, `Total: ${Math.round(totalScore)} pts`].concat(reveal && lastResult ? [`This round: ${Math.round(lastResult.points)} pts · ${Math.round(lastResult.distanceKm)} km`] : [])} />
 
-      {/* Mobile view toggle */}
-      <div className="lg:hidden flex items-center justify-center gap-2">
-        <button onClick={()=>setMobileMode('pano')} className={`px-4 py-2 rounded-xl text-sm ${mobileMode==='pano' ? 'bg-indigo-600 text-white' : 'bg-slate-800/70'}`}>Photo</button>
-        <button onClick={()=>setMobileMode('map')} className={`px-4 py-2 rounded-xl text-sm ${mobileMode==='map' ? 'bg-indigo-600 text-white' : 'bg-slate-800/70'}`}>Map</button>
-      </div>
+  <div className="text-xs opacity-70">Preset: {settings.preset || 'custom'} · Mult: {difficultyMultiplier(settings.preset)}×</div>
 
-      
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+  {/* Mobile view toggle */}
+  <div className="lg:hidden flex items-center justify-center gap-2">
+    <button onClick={()=>setMobileMode('pano')} className={`px-4 py-2 rounded-xl text-sm ${mobileMode==='pano' ? 'bg-indigo-600 text-white' : 'bg-slate-800/70'}`}>Photo</button> 
+    <button onClick={()=>setMobileMode('map')} className={`px-4 py-2 rounded-xl text-sm ${mobileMode==='map' ? 'bg-indigo-600 text-white' : 'bg-slate-800/70'}`}>Map</button>     
+  </div>
+
+<div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* Pano panel */}
-        <div className={`rounded-2xl shadow-xl ring-1 ring-white/10 ${mobileMode==='pano' ? 'block' : 'hidden'} lg:block h-[58vh] lg:h-[70vh] lg:col-span-2 ${freezePano ? 'overflow-y-auto' : 'overflow-hidden'}` }>
-          {(!googleReady || loading) && (
-            <div className="w-full h-full grid place-items-center bg-slate-900/60">
-              <div className="animate-pulse text-center"><div className="text-lg">{!googleReady ? 'Loading Google Maps…' : 'Loading Street View…'}</div></div>
-            </div>
-          )}
-          {error && !loading && (
-            <div className="w-full h-full grid place-items-center p-6 text-center bg-slate-900/60">
-              <div className="space-y-2"><p className="text-red-300 font-semibold">{error}</p><button onClick={startNewRoundInternal} className="px-4 py-2 bg-slate-700 rounded-xl hover:bg-slate-600" disabled={picking}>Try again</button></div>
-            </div>
-          )}
-          {googleReady && !loading && !error && answer && (
-            freezePano
-              ? <StreetViewStatic lat={answer.lat} lng={answer.lng} panoId={answer.panoId} heading={answer.pov?.heading ?? 0} pitch={answer.pov?.pitch ?? 15} />
-              : <InteractiveStreetView googleReady={googleReady} panoLatLng={{ lat: answer.lat, lng: answer.lng }} />
-          )}
+        <div className={`lg:col-span-2 ${mobileMode==='pano' ? 'block' : 'hidden'} lg:block`}>
+          <PanoPanel
+            googleReady={googleReady}
+            loading={loading}
+            error={error}
+            picking={picking}
+            freezePano={freezePano}
+            answer={answer}
+            onRetry={startNewRoundInternal}
+          />
         </div>
 
         {/* Map panel */}
-        <div className={`rounded-2xl overflow-hidden shadow-xl ring-1 ring-white/10 bg-slate-900 ${mobileMode==='map' ? 'block' : 'hidden'} lg:block h-[34vh] lg:h-[70vh] lg:col-span-1`}>
-          <GuessMap googleReady={googleReady} guess={guess} answer={reveal ? answer : null} onGuess={setGuess} interactive={true} />
+        <div className={`lg:col-span-1 ${mobileMode==='map' ? 'block' : 'hidden'} lg:block`}>
+          <MapPanel
+            googleReady={googleReady}
+            guess={guess}
+            answer={reveal ? answer : null}
+            onGuess={setGuess}
+          />
         </div>
       </div>
 
       {/* Sticky action bar on mobile */}
-      <div className="lg:hidden fixed bottom-0 left-0 right-0 z-40 p-3 pb-[calc(12px+env(safe-area-inset-bottom))] bg-gradient-to-t from-slate-950 via-slate-950/90 to-transparent">
-        <div className="flex items-center justify-between gap-2">
-          <div className="text-sm px-3 py-2 rounded-xl bg-slate-800/80">Round {round}/{maxRounds}</div>
-          {!reveal ? (
-            <button
-              disabled={!googleReady || !answer || !guess || picking}
-              onClick={onSubmitGuess}
-              className="flex-1 px-4 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-600 disabled:cursor-not-allowed"
-            >
-              Submit
-            </button>
-          ) : (
-            <div className="flex-1 flex gap-2">
-              <button
-                onClick={saveFavourite}
-                className="flex-1 px-4 py-3 rounded-xl bg-amber-600 hover:bg-amber-500 disabled:bg-slate-600 disabled:cursor-not-allowed"
-              >
-                Save favourite
-              </button>
-              <button
-                onClick={onNext}
-                disabled={picking}
-                className="flex-1 px-4 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:bg-slate-600 disabled:cursor-not-allowed"
-              >
-                {round >= maxRounds ? 'Play again' : 'Next'}
-              </button>
-            </div>
-          )}
-        </div>
-      </div>
+<StickyActionBar leftLabel={`Round ${round}/${maxRounds}`} reveal={reveal} disabled={!googleReady || !answer || !guess || picking} onSubmit={onSubmitGuess} onSaveFavourite={saveFavourite} onNext={onNext} picking={picking} showSaveFavourite={true} />
 
       {/* Desktop actions remain below */}
-      <div className="hidden lg:flex flex-col md:flex-row items-center justify-between gap-3">
-
-        <div className="text-sm opacity-80">Imagery: Google Street View. Basemap: Google Maps.</div>
-        <div className="flex items-center gap-2">
-          {!reveal ? (
-            <button disabled={!googleReady || !answer || !guess || picking} onClick={onSubmitGuess} className="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-600 disabled:cursor-not-allowed">Submit guess</button>
-          ) : (
-            <div className="flex gap-2">
-              <button onClick={onNext} disabled={picking} className="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:bg-slate-600 disabled:cursor-not-allowed">{round >= maxRounds ? 'Play again' : 'Next round'}</button>
-              <button onClick={saveFavourite} disabled={!fbReady || !user} className="px-5 py-2 rounded-xl bg-amber-600 hover:bg-amber-500 disabled:bg-slate-600 disabled:cursor-not-allowed">Save to Favourites</button>
-              {round >= maxRounds && (<button onClick={saveScore} disabled={!fbReady || !user} className="px-5 py-2 rounded-xl bg-pink-600 hover:bg-pink-500 disabled:bg-slate-600 disabled:cursor-not-allowed">Save score</button>)}
-            </div>
-          )}
-        </div>
-      </div>
+      <DesktopActionRow
+        reveal={reveal}
+        disabledSubmit={!googleReady || !answer || !guess || picking}
+        onSubmit={onSubmitGuess}
+        onNext={onNext}
+        onSaveFavourite={saveFavourite}
+        nextLabel={round >= maxRounds ? 'Play again' : 'Next round'}
+        saveDisabled={!fbReady || !user}
+        leftMeta={<div className="text-sm opacity-80">Imagery: Google Street View. Basemap: Google Maps.</div>}
+        showSaveScore={round >= maxRounds}
+        onSaveScore={saveScore}
+      />
 
       {reveal && lastResult && (
         <div className="rounded-2xl bg-slate-900/70 ring-1 ring-white/10 p-4 flex flex-wrap items-center gap-4">
