@@ -16,6 +16,12 @@ import PanoPanel from "../components/play/PanoPanel.jsx";
 
 const API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
 
+function getRevealRadiusKm(stageIndex, stage){
+  if (stage && typeof stage.revealRadiusKm === 'number') return stage.revealRadiusKm;
+  const ladder = [1000, 500, 250, 100, 25, 10, 5];
+  return ladder[Math.min(stageIndex, ladder.length - 1)];
+}
+
 export default function CampaignGame(){
   const navigate = useNavigate();
   const { caseId } = useParams();
@@ -139,6 +145,8 @@ export default function CampaignGame(){
         nextLabel={stageIndex >= maxStages-1 ? 'Finish campaign' : 'Next stage'}
         mobileMode={mobileMode}
         setMobileMode={setMobileMode}
+        mapRevealMode="circle"
+        mapRevealCircleKm={getRevealRadiusKm(stageIndex, stage)}
       />
 );
 }

@@ -28,6 +28,8 @@ export default function PlayScreen(props) {
     onSaveScore = () => {},
     showSaveScore = false,
     nextLabel = "Next round",
+  mapRevealMode = "marker",
+  mapRevealCircleKm = null,
     mobileMode = "pano",
     setMobileMode = () => {},
   } = props;
@@ -88,7 +90,9 @@ export default function PlayScreen(props) {
             guess={guess}
             answer={reveal ? answer : null}
             onGuess={onGuess}
-            heightClass={panelHeightClass}      /* <-- match PanoPanel */
+            heightClass={panelHeightClass}
+            revealMode={mapRevealMode}
+            revealCircleKm={mapRevealCircleKm}
           />
         </div>
       </div>
