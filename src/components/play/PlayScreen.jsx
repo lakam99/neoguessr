@@ -1,4 +1,3 @@
-import React from "react";
 import HeaderBar from "./HeaderBar.jsx";
 import PanoPanel from "./PanoPanel.jsx";
 import MapPanel from "./MapPanel.jsx";
@@ -6,33 +5,33 @@ import StickyActionBar from "./StickyActionBar.jsx";
 import DesktopActionRow from "./DesktopActionRow.jsx";
 import MobileToggle from "./MobileToggle.jsx";
 
-export default function PlayScreen({
-  label = "Round",
-  index = 1,
-  max = 5,
-  totalScore = 0,
-  reveal = false,
-  lastResult = null,
-  googleReady = false,
-  loading = false,
-  error = null,
-  freezePano = false,
-  answer = null,        // {lat,lng,panoId?,pov?}
-  text = "Investigate the photo and make your best guess.",
-  guess = null,         // [lat,lng]
-  onGuess = () => {},
-  picking = false,
-  // actions
-  onSubmit = () => {},
-  onNext = () => {},
-  onSaveFavourite = () => {},
-  onSaveScore = () => {},
-  showSaveScore = false,
-  nextLabel = "Next round",
-  // mobile view mode
-  mobileMode = "pano",
-  setMobileMode = () => {},
-}) {
+export default function PlayScreen(props) {
+  const {
+    label = "Round",
+    index = 1,
+    max = 5,
+    totalScore = 0,
+    reveal = false,
+    lastResult = null,
+    googleReady = false,
+    loading = false,
+    error = null,
+    freezePano = false,
+    answer = null,
+    text = "Investigate the photo and make your best guess.",
+    guess = null,
+    onGuess = () => {},
+    picking = false,
+    onSubmit = () => {},
+    onNext = () => {},
+    onSaveFavourite = () => {},
+    onSaveScore = () => {},
+    showSaveScore = false,
+    nextLabel = "Next round",
+    mobileMode = "pano",
+    setMobileMode = () => {},
+  } = props;
+
   const leftBadges = [
     `${label} ${index}/${max}`,
     `Total: ${Math.round(totalScore)} pts`,
@@ -43,6 +42,9 @@ export default function PlayScreen({
           lastResult.points
         )} pts · ${Math.round(lastResult.distanceKm)} km`
       : null;
+
+  // NEW: single source of truth for panel heights
+  const panelHeightClass = "h-[34vh] lg:h-[70vh]";
 
   return (
     <div
@@ -71,6 +73,7 @@ export default function PlayScreen({
             freezePano={freezePano}
             answer={answer}
             onRetry={null}
+            heightClass={panelHeightClass}      /* <-- match MapPanel height */
           />
         </div>
 
@@ -85,6 +88,7 @@ export default function PlayScreen({
             guess={guess}
             answer={reveal ? answer : null}
             onGuess={onGuess}
+            heightClass={panelHeightClass}      /* <-- match PanoPanel */
           />
         </div>
       </div>
