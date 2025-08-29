@@ -93,6 +93,7 @@ export default function PlayScreen(props) {
             heightClass={panelHeightClass}
             revealMode={mapRevealMode}
             revealCircleKm={mapRevealCircleKm}
+            interactive={!reveal}
           />
         </div>
       </div>
