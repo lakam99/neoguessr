@@ -152,15 +152,33 @@ export default function CampaignGame() {
   }
 
   async function onNext() {
-    // Fail case: "Try Again" — stay on same stage and let them adjust guess
+    // Fail case: "Try Again" — reset campaign to stage 1 and clear score/results
     if (!canAdvance) {
-      setReveal(false);
+      try {
+        if (uid && caseId) {
+          const dref = doc(db, "campaigns", uid, "cases", caseId);
+          await updateDoc(dref, {
+            progress: 0,
+            score: 0,
+            results: {},                 // wipe prior stage results
+            updatedAt: serverTimestamp(),
+          });
+        }
+      } catch (e) {
+        console.error("Failed to reset campaign:", e);
+      }
+
+      // Local reset
+      setStageIndex(0);
+      setTotalScore(0);
+      setGuess(null);
       setLastResult(null);
-      // keep `guess` so they see where they clicked; they can move it and resubmit
+      setReveal(false);
+      setCanAdvance(false);
       return;
     }
 
-    // Success case: advance
+    // Success case: advance to next stage (unchanged)
     const nextIndex = Math.min(stageIndex + 1, maxStages - 1);
     setReveal(false);
     setGuess(null);
@@ -177,6 +195,7 @@ export default function CampaignGame() {
       console.error("Failed to save campaign progress index:", e);
     }
   }
+
 
   async function saveFavourite() {
     const user = auth?.currentUser || null;
