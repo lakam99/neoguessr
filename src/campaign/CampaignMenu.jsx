@@ -58,7 +58,6 @@ export default function CampaignMenu() {
     }
   };
 
-
   const [myCases, setMyCases] = React.useState([]);
   const [leader, setLeader] = React.useState([]);
   const [creating, setCreating] = React.useState(false);
@@ -116,9 +115,9 @@ export default function CampaignMenu() {
 
       // Difficulty presets: number of stages (including final target) and reveal radii
       const presets = {
-        easy:   { distances: [0, 50, 500, 1500], radii: [1500, 600, 120, 8] },
-        standard:{ distances: [0, 50, 400, 1200, 2500], radii: [2000, 800, 200, 60, 8] },
-        hard:   { distances: [0, 30, 200, 800, 2000, 3500], radii: [2500, 1000, 300, 120, 40, 8] },
+        easy:    { distances: [0, 50, 500, 1500],            radii: [3000, 1000, 600, 200] },
+        standard:{ distances: [0, 50, 400, 1200, 2500],      radii: [2000, 1000, 500, 250, 50] },
+        hard:    { distances: [0, 30, 200, 800, 2000, 3500], radii: [1000, 500, 300, 200, 100, 2.4] },
       };
       const preset = presets[difficulty] || presets.standard;
 
@@ -173,19 +172,21 @@ export default function CampaignMenu() {
   return (
     <div className="flex flex-col gap-6">
       {/* Header with rank + progress */}
-      <div className="flex items-center justify-between gap-4 bg-slate-900/70 ring-1 ring-white/10 p-3 rounded-xl">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 bg-slate-900/70 ring-1 ring-white/10 p-3 rounded-xl">
         <div className="flex items-center gap-3">
           <div className="text-lg font-semibold">Campaign Mode</div>
           <div className="text-sm opacity-80">Ranks & leaderboards</div>
         </div>
-        <div className="flex flex-col items-end gap-2 min-w-[200px]">
-          <div className="flex items-center gap-2">
+        <div className="w-full sm:w-auto flex flex-col sm:items-end gap-2 min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
             <span className="px-3 py-1 rounded-full bg-indigo-600/70">{myRank.title}</span>
             <span className="px-3 py-1 rounded-full bg-slate-700/70">Total: {myTotal}</span>
           </div>
           {nextRank && (
-            <div className="w-64">
-              <div className="text-xs opacity-80 mb-1">Progress to {nextRank.title}: {rankProgress.val} / {rankProgress.span} ({rankProgress.pct}%)</div>
+            <div className="w-full sm:w-64">
+              <div className="text-xs opacity-80 mb-1">
+                Progress to {nextRank.title}: {rankProgress.val} / {rankProgress.span} ({rankProgress.pct}%)
+              </div>
               <div className="h-2 rounded bg-slate-800 overflow-hidden ring-1 ring-white/10">
                 <div className="h-full bg-indigo-600" style={{ width: `${rankProgress.pct}%` }} />
               </div>
@@ -194,26 +195,39 @@ export default function CampaignMenu() {
         </div>
       </div>
 
-      <div className="grid md:grid-cols-3 gap-4">
-        {/* Your campaigns */}
-        <div className="md:col-span-2 space-y-4">
-          <div className="rounded-xl ring-1 ring-white/10 bg-slate-900/50">
-            <div className="p-3 border-b border-white/10 flex items-center justify-between">
-              <div className="flex items-center gap-2">
+      {/* Body: stacked on mobile; 2+1 columns on lg */}
+      <div className="flex flex-col gap-4 lg:grid lg:grid-cols-3">
+        {/* LEFT — Your campaigns (2 cols on desktop) */}
+        <section className="order-2 lg:order-none lg:col-span-2 min-w-0 space-y-4">
+          <div className="rounded-xl ring-1 ring-white/10 bg-slate-900/50 min-w-0">
+            {/* Header row: responsive */}
+            <div className="p-3 border-b border-white/10 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+              <div className="flex flex-wrap items-center gap-2">
                 <label className="text-sm opacity-80">Difficulty:</label>
-                <select value={difficulty} onChange={e => setDifficulty(e.target.value)} className="px-2 py-1 rounded bg-slate-800 ring-1 ring-white/10">
+                <select
+                  value={difficulty}
+                  onChange={e => setDifficulty(e.target.value)}
+                  className="px-2 py-1 rounded bg-slate-800 ring-1 ring-white/10 text-sm"
+                >
                   <option value="easy">Trainee (Easy)</option>
                   <option value="standard">Operative (Standard)</option>
                   <option value="hard">Insurgent (Hard)</option>
                   <option value="cia">Black Ops (CIA)</option>
                 </select>
               </div>
-              <div className="font-semibold">Your Campaigns</div>
-              <button onClick={createCampaign} disabled={creating || !uid} className="px-3 py-1 rounded bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50">
+
+              <div className="font-semibold text-center sm:text-left">Your Campaigns</div>
+
+              <button
+                onClick={createCampaign}
+                disabled={creating || !uid}
+                className="w-full sm:w-auto px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50"
+              >
                 {creating ? "Creating…" : "Create New Campaign"}
               </button>
             </div>
 
+            {/* Progress bar */}
             {creating && (
               <div className="p-3">
                 <div className="h-2 rounded bg-slate-800 overflow-hidden ring-1 ring-white/10">
@@ -223,17 +237,35 @@ export default function CampaignMenu() {
               </div>
             )}
 
-            <div className="divide-y divide-white/5">
+            {/* Campaign list */}
+            <div className="divide-y divide-white/5 max-h-[60vh] overflow-y-auto">
               {myCases.map(cs => (
-                <div key={cs.id} className="p-3 flex items-center justify-between gap-3">
-                  <div className="flex-1">
-                    <div className="font-semibold">{cs.title || "Procedural Case"}</div>
-                    <div className="text-xs opacity-80">Progress: Stage {(cs.progress || 0) + 1} / {cs.stages?.length || "?"} · Score: {cs.score || 0}</div>
+                <div key={cs.id} className="p-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-3">
+                  <div className="flex-1 min-w-0">
+                    <div className="font-semibold truncate">{cs.title || "Procedural Case"}</div>
+                    <div className="text-xs opacity-80">
+                      Progress: Stage {(cs.progress || 0) + 1} / {cs.stages?.length || "?"} · Score: {cs.score || 0}
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <Link to={`/campaign/play/${cs.id}`} className="px-3 py-1 rounded bg-indigo-600 hover:bg-indigo-500 text-white">Play</Link>
-                    <button onClick={() => renameCampaign(cs.id)} className="px-3 py-1 rounded bg-slate-700 hover:bg-slate-600">Rename</button>
-                    <button onClick={() => deleteCampaign(cs.id)} className="px-3 py-1 rounded bg-red-600 hover:bg-red-500 text-white">Delete</button>
+                  <div className="w-full sm:w-auto flex flex-col sm:flex-row gap-2">
+                    <Link
+                      to={`/campaign/play/${cs.id}`}
+                      className="w-full sm:w-auto px-3 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-sm text-center"
+                    >
+                      Play
+                    </Link>
+                    <button
+                      onClick={() => renameCampaign(cs.id)}
+                      className="w-full sm:w-auto px-3 py-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-sm"
+                    >
+                      Rename
+                    </button>
+                    <button
+                      onClick={() => deleteCampaign(cs.id)}
+                      className="w-full sm:w-auto px-3 py-2 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-sm"
+                    >
+                      Delete
+                    </button>
                   </div>
                 </div>
               ))}
@@ -242,33 +274,35 @@ export default function CampaignMenu() {
               )}
             </div>
           </div>
-        </div>
+        </section>
 
-        {/* Leaderboards by rank */}
-        <div className="space-y-4">
+        {/* RIGHT — Leaderboards by rank */}
+        <aside className="order-1 lg:order-none min-w-0 space-y-4">
           <div className="rounded-xl ring-1 ring-white/10 bg-slate-900/50">
             <div className="p-3 border-b border-white/10 font-semibold">Campaign Leaderboards</div>
             <div className="p-3 space-y-3 max-h-[60vh] overflow-auto">
               {Object.entries(buckets).map(([rank, rows]) => (
-                <div key={rank}>
+                <div key={rank} className="min-w-0">
                   <div className="text-sm mb-1 opacity-80">{rank}</div>
-                  <table className="w-full text-sm">
-                    <tbody>
-                      {rows.map((r, i) => (
-                        <tr key={r.uid || r.id} className="odd:bg-white/5">
-                          <td className="px-2 py-1 w-8">{i + 1}</td>
-                          <td className="px-2 py-1">{r.username || 'Unknown'}</td>
-                          <td className="px-2 py-1 text-right">{r.total}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                  <div className="w-full min-w-0 overflow-x-auto rounded-lg ring-1 ring-white/10">
+                    <table className="w-full text-sm">
+                      <tbody>
+                        {rows.map((r, i) => (
+                          <tr key={r.uid || r.id} className="odd:bg-white/5">
+                            <td className="px-3 py-2 whitespace-nowrap w-10">{i + 1}</td>
+                            <td className="px-3 py-2 whitespace-nowrap">{r.username || 'Unknown'}</td>
+                            <td className="px-3 py-2 whitespace-nowrap text-right">{r.total}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               ))}
               {leader.length === 0 && <div className="text-sm opacity-70">No entries yet.</div>}
             </div>
           </div>
-        </div>
+        </aside>
       </div>
     </div>
   );

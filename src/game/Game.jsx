@@ -27,7 +27,7 @@ function baseScoreFromDistanceKm(km) { const s = Math.floor(5000 * Math.exp(-km 
 
 function difficultyMultiplier(preset) {
   switch ((preset || '').toLowerCase()) {
-    case 'ez': return 0.5;
+    case 'tutorial': return 0.5;
     case 'hard': return 1.2;
     case 'cia': return 1.6;
     case 'moderate': return 1.0;

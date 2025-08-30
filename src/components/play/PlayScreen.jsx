@@ -47,7 +47,7 @@ export default function PlayScreen(props) {
       : null;
 
   // NEW: single source of truth for panel heights
-  const panelHeightClass = "h-[34vh] lg:h-[70vh]";
+  const panelHeightClass = "h-[80vh] lg:h-[70vh]";
 
   return (
     <div

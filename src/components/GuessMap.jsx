@@ -177,10 +177,8 @@ export default function GuessMap({
         if (z && z > 12) map.current.setZoom(12);
       }
     } else {
-      // Guess-only: do not change zoom. Optional gentle pan (kept disabled to avoid motion):
-      // if (Array.isArray(guess)) {
-      //   map.current.panTo(new google.maps.LatLng(guess[0], guess[1]));
-      // }
+      // Guess-only: do not change zoom. Optional gentle pan:
+      // if (Array.isArray(guess)) map.current.panTo(new google.maps.LatLng(guess[0], guess[1]));
     }
   }, [googleReady, answer, guess, revealMode, revealCircleKm]);
 
