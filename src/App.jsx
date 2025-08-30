@@ -26,13 +26,6 @@ function TopNav({ user, onSignIn, onSignOut }) {
             Neo-Guessr
           </Link>
 
-          {/* Desktop nav */}
-          <nav className="hidden md:flex items-center gap-2 text-sm">
-            <Link to="/" className="px-3 py-1 rounded-full bg-slate-700/60 hover:bg-slate-600">Menu</Link>
-            <Link to="/play" className="px-3 py-1 rounded-full bg-slate-700/60 hover:bg-slate-600">Play</Link>
-            <Link to="/campaign" className="px-3 py-1 rounded-full bg-slate-700/60 hover:bg-slate-600">Campaign</Link>
-            <Link to="/profile" className="px-3 py-1 rounded-full bg-slate-700/60 hover:bg-slate-600">Profile</Link>
-          </nav>
         </div>
 
         <div className="flex items-center gap-2">
@@ -51,9 +44,13 @@ function TopNav({ user, onSignIn, onSignOut }) {
           {fbReady ? (
             user ? (
               <>
-                <span className="hidden sm:inline px-3 py-1 rounded-full bg-indigo-600/80 text-center">
+                <Link
+                  to="/profile"
+                  className="hidden sm:inline px-3 py-1 rounded-full bg-indigo-600/80 hover:bg-indigo-500 focus:ring-2 focus:ring-indigo-300 text-center"
+                  title="View profile"
+                >
                   {user.displayName || user.email}
-                </span>
+                </Link>
                 <button onClick={onSignOut} className="px-3 py-1 rounded-lg bg-slate-700 hover:bg-slate-600">
                   Sign out
                 </button>
@@ -81,9 +78,8 @@ function TopNav({ user, onSignIn, onSignOut }) {
         />
         {/* Panel */}
         <aside
-          className={`absolute left-0 top-0 h-full w-64 bg-slate-900 shadow-2xl ring-1 ring-white/10 transform transition-transform ${
-            open ? "translate-x-0" : "-translate-x-full"
-          }`}
+          className={`absolute left-0 top-0 h-full w-64 bg-slate-900 shadow-2xl ring-1 ring-white/10 transform transition-transform ${open ? "translate-x-0" : "-translate-x-full"
+            }`}
         >
           <div className="p-4 border-b border-white/10 flex items-center justify-between">
             <span className="font-semibold">Navigation</span>
@@ -94,12 +90,6 @@ function TopNav({ user, onSignIn, onSignOut }) {
           <nav className="p-3 flex flex-col gap-2">
             <Link onClick={() => setOpen(false)} to="/" className="px-3 py-2 rounded bg-slate-800/70 hover:bg-slate-700">
               Menu
-            </Link>
-            <Link onClick={() => setOpen(false)} to="/play" className="px-3 py-2 rounded bg-slate-800/70 hover:bg-slate-700">
-              Play
-            </Link>
-            <Link onClick={() => setOpen(false)} to="/campaign" className="px-3 py-2 rounded bg-slate-800/70 hover:bg-slate-700">
-              Campaign
             </Link>
             <Link onClick={() => setOpen(false)} to="/profile" className="px-3 py-2 rounded bg-slate-800/70 hover:bg-slate-700">
               Profile
@@ -131,7 +121,7 @@ export default function App() {
   React.useEffect(() => {
     try {
       localStorage.setItem("wg_settings", JSON.stringify(settings));
-    } catch {}
+    } catch { }
   }, [settings]);
 
   async function onSignIn() {

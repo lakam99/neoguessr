@@ -13,6 +13,7 @@ import {
 } from "../firebase";
 import { useSettings } from "../ctx/SettingsContext.jsx";
 import { RANKS, rankFor } from "../lib/ranks.js";
+import RankMedal from "../components/ui/RankMedal.jsx";
 
 // ----- Classic mode presets (same as before)
 const PRESETS = {
@@ -77,21 +78,41 @@ export default function Menu() {
     return { curMin, nextMin, val, span, pct };
   }, [myRank, nextRank, myTotal]);
 
-  // ----- Classic mode UI state (same as before)
+  // ----- Classic mode UI state
   const [draft, setDraft] = React.useState(settings);
   const [showAdvanced, setShowAdvanced] = React.useState(false);
 
+  // NEW: track a "selected" preset so one is always highlighted
+  const [selectedPreset, setSelectedPreset] = React.useState(() => (
+    PRESETS[settings?.preset] ? settings.preset : "moderate"
+  ));
+
+  // Ensure there is *always* a valid selected preset on mount
+  React.useEffect(() => {
+    if (!PRESETS[draft?.preset]) {
+      // Default the working config toward the selectedPreset (or moderate)
+      const key = PRESETS[selectedPreset] ? selectedPreset : "moderate";
+      setDraft(prev => ({ ...prev, preset: key, ...PRESETS[key], svBaseBackoffMs: 2000 }));
+      setSelectedPreset(key);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // run once
+
   function applyPreset(name) {
-    const p = PRESETS[name];
-    setDraft((prev) => ({ ...prev, preset: name, ...p, svBaseBackoffMs: 2000 }));
+    const p = PRESETS[name] || PRESETS.moderate;
+    setSelectedPreset(name); // keep selection even if advanced options are changed later
+    setDraft(prev => ({ ...prev, preset: name, ...p, svBaseBackoffMs: 2000 }));
   }
 
   function updateField(key, value) {
-    setDraft((prev) => ({ ...prev, preset: "custom", [key]: value }));
+    // Switch to "custom" but do NOT change selectedPreset (so a tile stays highlighted)
+    setDraft(prev => ({ ...prev, preset: "custom", [key]: value }));
   }
 
   function startClassic() {
-    const toSave = { ...draft, svBaseBackoffMs: 2000 };
+    // If draft.preset is invalid/custom, fall back to the selectedPreset tile
+    const pkey = PRESETS[draft.preset] ? draft.preset : (PRESETS[selectedPreset] ? selectedPreset : "moderate");
+    const toSave = { ...draft, preset: pkey, ...PRESETS[pkey], svBaseBackoffMs: 2000 };
     setSettings(toSave);
     nav("/play");
   }
@@ -109,6 +130,10 @@ export default function Menu() {
           <h1 className="text-2xl sm:text-3xl md:text-4xl font-extrabold tracking-tight">
             Campaign Mode
           </h1>
+          <div className="mt-2 flex items-center justify-center gap-2">
+            <RankMedal variant="gold" size={28} animated />
+            <span className="text-sm opacity-80">Campaign Mode</span>
+          </div>
           <p className="mt-2 text-sm sm:text-base opacity-85 max-w-prose">
             Track a target from a wide search area down to a tight circle. Earn points,
             climb ranks, and become an elite operative.
@@ -200,9 +225,8 @@ export default function Menu() {
           {/* Preset grid */}
           <div className="mt-4 grid grid-cols-2 md:grid-cols-4 gap-2">
             {Object.entries(PRESETS).map(([key, val]) => {
-              const title =
-                key === "cia" ? "Operative" : key[0].toUpperCase() + key.slice(1);
-              const active = draft.preset === key;
+              const title = key === "cia" ? "Operative" : key[0].toUpperCase() + key.slice(1);
+              const active = selectedPreset === key; // <- always one active
               return (
                 <button
                   key={key}
