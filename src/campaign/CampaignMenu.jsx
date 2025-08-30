@@ -19,6 +19,7 @@ import { useToast } from "../ctx/ToastContext.jsx";
 import { loadGoogleMaps } from "../lib/maps.js";
 import { generateBackwardTrail } from "../lib/campaign.js";
 import { RANKS, rankFor, groupByRank } from "../lib/ranks.js";
+import RankTimeline from "../components/ui/RankTimeline.jsx";
 import RankUpModal from "../components/ui/RankUpModal.jsx";
 
 const API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
@@ -210,6 +211,11 @@ export default function CampaignMenu() {
               <div className="h-2 rounded bg-slate-800 overflow-hidden ring-1 ring-white/10">
                 <div className="h-full bg-indigo-600" style={{ width: `${rankProgress.pct}%` }} />
               </div>
+          <div className="w-full mt-3">
+            <RankTimeline ranks={RANKS} total={myTotal} />
+            <div className="text-[11px] opacity-70 mt-1">Hover or tap segments to see each rank’s requirement.</div>
+          </div>
+
             </div>
           )}
         </div>
