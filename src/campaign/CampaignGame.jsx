@@ -1,6 +1,6 @@
 import React from "react";
 import { useNavigate, useParams, Link } from "react-router-dom";
-import { auth, db, doc, collection, addDoc, serverTimestamp, updateDoc, increment } from "../firebase";
+import { auth, db, doc, collection, addDoc, serverTimestamp, updateDoc, increment, setDoc } from "../firebase";
 import { getDoc } from "firebase/firestore";
 import { loadGoogleMaps } from "../lib/maps.js";
 import { distanceKm } from "../lib/campaign.js";
@@ -150,6 +150,58 @@ export default function CampaignGame() {
       console.error("Failed to save campaign progress:", e);
     }
   }
+  async function finalizeCampaign() {
+    try {
+      if (!uid || !caseId) return;
+      const dref = doc(db, "campaigns", uid, "cases", caseId);
+      const snap = await getDoc(dref);
+      if (!snap.exists()) return;
+      const data = snap.data() || {};
+      if (data.finalized) return; // avoid double counting
+
+      const finalScore = Number(data.score || 0);
+      const username = auth?.currentUser?.displayName || auth?.currentUser?.email || "anonymous";
+
+      // 1) Update per-user campaign totals (monotonic)
+      const totalRef = doc(db, "leaderboards", "campaign", "totals", uid);
+      const totalSnap = await getDoc(totalRef);
+      if (totalSnap.exists()) {
+        const cur = totalSnap.data()?.total || 0;
+        const next = Math.max(cur, cur + finalScore); // ensure monotonic non-decrease
+        await updateDoc(totalRef, {
+          username,
+          uid,
+          total: next,
+          updatedAt: serverTimestamp(),
+        });
+      } else {
+        await setDoc(totalRef, {
+          username,
+          uid,
+          total: finalScore,
+          updatedAt: serverTimestamp(),
+        });
+      }
+
+      // 2) Insert individual case score row
+      await addDoc(collection(db, "leaderboards", "campaign", "scores"), {
+        username,
+        uid,
+        score: finalScore,
+        caseId,
+        createdAt: serverTimestamp(),
+      });
+
+      // 3) Mark campaign finalized
+      await updateDoc(dref, {
+        finalized: true,
+        completedAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+    } catch (e) {
+      console.error("Finalize failed:", e);
+    }
+  }
 
   async function onNext() {
     // Fail case: "Try Again" — reset campaign to stage 1 and clear score/results
@@ -178,6 +230,17 @@ export default function CampaignGame() {
       return;
     }
 
+
+    // Success case: if this is the final stage, finalize and exit
+    if (canAdvance && stageIndex >= maxStages - 1) {
+      await finalizeCampaign();
+      setReveal(false);
+      setGuess(null);
+      setLastResult(null);
+      setCanAdvance(false);
+      try { navigate("/campaign"); } catch {}
+      return;
+    }
     // Success case: advance
     const nextIndex = Math.min(stageIndex + 1, maxStages - 1);
     setReveal(false);

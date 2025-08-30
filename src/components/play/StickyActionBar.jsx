@@ -1,15 +1,13 @@
 import React from "react";
 
-export default function StickyActionBar({
-  leftLabel,       // string, e.g., "Round 2/5" or "Stage 1/4"
+export default function StickyActionBar({ leftLabel,       // string, e.g., "Round 2/5" or "Stage 1/4"
   reveal,
   disabled,
   onSubmit,
   onSaveFavourite,
   onNext,
   picking=false,
-  showSaveFavourite=true,
-}){
+  showSaveFavourite=true, nextLabel = "Next" }){
   return (
     <div className="lg:hidden fixed bottom-0 left-0 right-0 z-40 p-3 pt-8 bg-gradient-to-t from-slate-950 via-slate-950/90 to-transparent">
       <div className="flex items-center justify-between gap-2">
