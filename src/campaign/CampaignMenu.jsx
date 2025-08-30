@@ -1,12 +1,27 @@
 import React from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { auth, db, collection, addDoc, serverTimestamp, doc, setDoc, updateDoc, deleteDoc } from "../firebase";
+import {
+  auth,
+  db,
+  collection,
+  addDoc,
+  serverTimestamp,
+  doc,
+  setDoc,
+  updateDoc,
+  deleteDoc,
+  query,
+  orderBy,
+  onSnapshot,
+  getDoc,
+} from "../firebase";
 import { useToast } from "../ctx/ToastContext.jsx";
 import { loadGoogleMaps } from "../lib/maps.js";
 import { generateBackwardTrail } from "../lib/campaign.js";
 import { RANKS, rankFor, groupByRank } from "../lib/ranks.js";
 import RankTimeline from "../components/ui/RankTimeline.jsx";
 import RankUpModal from "../components/ui/RankUpModal.jsx";
+import RankMedal, { variantForRankTitle } from "../components/ui/RankMedal.jsx";
 
 const API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
 
@@ -18,32 +33,20 @@ export default function CampaignMenu() {
   const notify = (type, msg) => {
     try {
       if (!toast) return;
-
-      // 1) Object w/ methods: toast.success/info/error/warn
-      if (typeof toast[type] === 'function') return toast[type](msg);
-
-      // 2) Function: toast(type, msg) or toast({type,message})
-      if (typeof toast === 'function') {
+      if (typeof toast[type] === "function") return toast[type](msg);
+      if (typeof toast === "function") {
         try { return toast(type, msg); } catch { }
         return toast({ type, message: msg });
       }
-
-      // 3) Common alternates
-      if (typeof toast.push === 'function') return toast.push(type, msg);
-      if (typeof toast.add === 'function') return toast.add({ type, message: msg });
-      if (typeof toast.show === 'function') return toast.show(msg, { type });
-      if (typeof toast.notify === 'function') return toast.notify({ type, message: msg });
-      if (typeof toast.enqueueSnackbar === 'function') return toast.enqueueSnackbar(msg, { variant: type });
-      if (typeof toast.enqueue === 'function') return toast.enqueue(msg, { variant: type });
-
-      // 4) Tuple: [fn, ...]
-      if (Array.isArray(toast) && typeof toast[0] === 'function') return toast[0](type, msg);
-
-      // 5) Last-resort: log silently
+      if (typeof toast.push === "function") return toast.push(type, msg);
+      if (typeof toast.add === "function") return toast.add({ type, message: msg });
+      if (typeof toast.show === "function") return toast.show(msg, { type });
+      if (typeof toast.notify === "function") return toast.notify({ type, message: msg });
+      if (typeof toast.enqueueSnackbar === "function") return toast.enqueueSnackbar(msg, { variant: type });
+      if (typeof toast.enqueue === "function") return toast.enqueue(msg, { variant: type });
+      if (Array.isArray(toast) && typeof toast[0] === "function") return toast[0](type, msg);
       console.log(`[${type}]`, msg);
-    } catch {
-      // swallow
-    }
+    } catch { /* swallow */ }
   };
 
   const [myCases, setMyCases] = React.useState([]);
@@ -52,6 +55,7 @@ export default function CampaignMenu() {
   const [difficulty, setDifficulty] = React.useState("standard");
   const [progress, setProgress] = React.useState({ pct: 0, note: "" });
 
+  // Rank-up UX
   const [showRankUp, setShowRankUp] = React.useState(false);
   const [rankUpTo, setRankUpTo] = React.useState(null);
   const [ackRankIdx, setAckRankIdx] = React.useState(-1);
@@ -60,14 +64,82 @@ export default function CampaignMenu() {
   const user = auth?.currentUser || null;
   const uid = user?.uid || null;
 
-  // Subscribe to user's campaigns + leaderboard
-  
+  // Subscribe to user's campaigns + leaderboard, and read ack meta once
+  React.useEffect(() => {
+    if (!uid || !db) return;
+    const qCases = query(collection(db, "campaigns", uid, "cases"), orderBy("updatedAt", "desc"));
+    const unsub1 = onSnapshot(qCases, (snap) => {
+      setMyCases(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+    });
+
+    const qLead = query(collection(db, "leaderboards", "campaign", "totals"), orderBy("total", "desc"));
+    const unsub2 = onSnapshot(qLead, (snap) => {
+      setLeader(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+    });
+
+    // Rank-acknowledgement meta
+    (async () => {
+      try {
+        const mref = doc(db, "campaigns", uid, "cases", "__meta__");
+        const msnap = await getDoc(mref);
+        if (msnap.exists()) {
+          const meta = msnap.data() || {};
+          if (typeof meta.lastAckRankIndex === "number") setAckRankIdx(meta.lastAckRankIndex);
+          if (typeof meta.lastAckRankTitle === "string") setAckRankTitle(meta.lastAckRankTitle);
+        }
+      } catch { }
+    })();
+
+    return () => {
+      unsub1 && unsub1();
+      unsub2 && unsub2();
+    };
+  }, [uid]);
+
+  // --- Rank math (derived) ---
+  const myTotal = React.useMemo(() => {
+    const row = (leader || []).find((r) => r.uid === uid);
+    return row?.total ?? 0;
+  }, [leader, uid]);
+
+  const myRank = React.useMemo(() => rankFor(myTotal), [myTotal]);
+
+  const nextRank = React.useMemo(() => {
+    const idx = RANKS.findIndex((r) => r.title === myRank.title);
+    return idx >= 0 && idx < RANKS.length - 1 ? RANKS[idx + 1] : null;
+  }, [myRank]);
+
+  const rankProgress = React.useMemo(() => {
+    const curMin = myRank.min || 0;
+    const nextMin = nextRank ? nextRank.min : Math.max(curMin, myTotal);
+    const span = Math.max(1, nextMin - curMin);
+    const val = Math.min(span, Math.max(0, myTotal - curMin));
+    const pct = Math.round((val / span) * 100);
+    return { curMin, nextMin, val, span, pct };
+  }, [myRank, nextRank, myTotal]);
+
+  const buckets = React.useMemo(() => groupByRank(leader || []), [leader]);
+
+  const myRankIdx = React.useMemo(
+    () => RANKS.findIndex((r) => r.title === myRank.title),
+    [myRank.title]
+  );
+
+  // Show rank-up once past last acknowledged rank
+  React.useEffect(() => {
+    if (!uid || !myRank?.title) return;
+    if (myRankIdx > Math.max(-1, ackRankIdx)) {
+      setRankUpTo(myRank.title);
+      setShowRankUp(true);
+    }
+  }, [uid, myRank?.title, myRankIdx, ackRankIdx]);
 
   // Actions
   async function createCampaign() {
-    if (!API_KEY) return notify('error', "Missing Google Maps API key.");
-    if (!uid) return notify('info', "Sign in to create a campaign.");
-    setCreating(true); setProgress({ pct: 0, note: "Starting…" });
+    if (!API_KEY) return notify("error", "Missing Google Maps API key.");
+    if (!uid) return notify("info", "Sign in to create a campaign.");
+    setCreating(true);
+    setProgress({ pct: 0, note: "Starting…" });
 
     try {
       const google = await loadGoogleMaps(API_KEY);
@@ -75,9 +147,10 @@ export default function CampaignMenu() {
 
       // Difficulty presets: number of stages (including final target) and reveal radii
       const presets = {
-        easy:    { distances: [0, 50, 500, 1500],            radii: [3000, 1000, 600, 200] },
-        standard:{ distances: [0, 50, 400, 1200, 2500],      radii: [2000, 1000, 500, 250, 50] },
-        hard:    { distances: [0, 30, 200, 800, 2000, 3500], radii: [1000, 500, 300, 200, 100, 2.4] },
+        easy: { distances: [0, 50, 500, 1500], radii: [3000, 1000, 600, 200] },
+        standard: { distances: [0, 50, 400, 1200, 2500], radii: [2000, 1000, 500, 250, 50] },
+        hard: { distances: [0, 30, 200, 800, 2000, 3500], radii: [1000, 500, 300, 200, 100, 2.4] },
+        cia: { distances: [0, 25, 150, 600, 1800, 3600], radii: [800, 400, 250, 150, 80, 2] },
       };
       const preset = presets[difficulty] || presets.standard;
 
@@ -108,7 +181,7 @@ export default function CampaignMenu() {
     } catch (e) {
       console.error(e);
       setCreating(false);
-      notify('error', "Failed to create campaign. Try again.");
+      notify("error", "Failed to create campaign. Try again.");
     }
   }
 
@@ -117,16 +190,20 @@ export default function CampaignMenu() {
     if (!name) return;
     try {
       await updateDoc(doc(db, "campaigns", uid, "cases", id), { title: name, updatedAt: serverTimestamp() });
-      notify('success', "Renamed.");
-    } catch (e) { notify('error', "Rename failed."); }
+      notify("success", "Renamed.");
+    } catch (e) {
+      notify("error", "Rename failed.");
+    }
   }
 
   async function deleteCampaign(id) {
     if (!confirm("Delete this campaign? This cannot be undone.")) return;
     try {
       await deleteDoc(doc(db, "campaigns", uid, "cases", id));
-      notify('success', "Deleted.");
-    } catch (e) { notify('error', "Delete failed."); }
+      notify("success", "Deleted.");
+    } catch (e) {
+      notify("error", "Delete failed.");
+    }
   }
 
   return (
@@ -142,6 +219,17 @@ export default function CampaignMenu() {
             <span className="px-3 py-1 rounded-full bg-indigo-600/70">{myRank.title}</span>
             <span className="px-3 py-1 rounded-full bg-slate-700/70">Total: {myTotal}</span>
           </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="px-3 py-1 rounded-full bg-indigo-600/70 flex items-center gap-2">
+              <RankMedal
+                variant={variantForRankTitle(myRank.title)}
+                size={20}
+                animated
+              />
+              {myRank.title}
+            </span>
+            <span className="px-3 py-1 rounded-full bg-slate-700/70">Total: {myTotal}</span>
+            + </div>
           {nextRank && (
             <div className="w-full sm:w-64">
               <div className="text-xs opacity-80 mb-1">
@@ -150,11 +238,13 @@ export default function CampaignMenu() {
               <div className="h-2 rounded bg-slate-800 overflow-hidden ring-1 ring-white/10">
                 <div className="h-full bg-indigo-600" style={{ width: `${rankProgress.pct}%` }} />
               </div>
-          <div className="w-full mt-3">
-            <RankTimeline ranks={RANKS} total={myTotal} />
-            <div className="text-[11px] opacity-70 mt-1">Hover or tap segments to see each rank’s requirement.</div>
-          </div>
 
+              <div className="w-full mt-3">
+                <RankTimeline ranks={RANKS} total={myTotal} />
+                <div className="text-[11px] opacity-70 mt-1">
+                  Hover or tap segments to see each rank’s requirement.
+                </div>
+              </div>
             </div>
           )}
         </div>
@@ -171,7 +261,7 @@ export default function CampaignMenu() {
                 <label className="text-sm opacity-80">Difficulty:</label>
                 <select
                   value={difficulty}
-                  onChange={e => setDifficulty(e.target.value)}
+                  onChange={(e) => setDifficulty(e.target.value)}
                   className="px-2 py-1 rounded bg-slate-800 ring-1 ring-white/10 text-sm"
                 >
                   <option value="easy">Trainee (Easy)</option>
@@ -204,7 +294,7 @@ export default function CampaignMenu() {
 
             {/* Campaign list */}
             <div className="divide-y divide-white/5 max-h-[60vh] overflow-y-auto">
-              {myCases.map(cs => (
+              {myCases.map((cs) => (
                 <div key={cs.id} className="p-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-3">
                   <div className="flex-1 min-w-0">
                     <div className="font-semibold truncate">{cs.title || "Procedural Case"}</div>
@@ -235,7 +325,9 @@ export default function CampaignMenu() {
                 </div>
               ))}
               {myCases.length === 0 && (
-                <div className="p-3 text-sm opacity-80">No campaigns yet. Create a new one to begin your ascent through the ranks.</div>
+                <div className="p-3 text-sm opacity-80">
+                  No campaigns yet. Create a new one to begin your ascent through the ranks.
+                </div>
               )}
             </div>
           </div>
@@ -249,13 +341,17 @@ export default function CampaignMenu() {
               {Object.entries(buckets).map(([rank, rows]) => (
                 <div key={rank} className="min-w-0">
                   <div className="text-sm mb-1 opacity-80">{rank}</div>
+                  <div className="text-sm mb-1 opacity-80 flex items-center gap-2">
+                    <RankMedal variant={variantForRankTitle(rank)} size={14} />
+                    <span>{rank}</span>
+                  </div>
                   <div className="w-full min-w-0 overflow-x-auto rounded-lg ring-1 ring-white/10">
                     <table className="w-full text-sm">
                       <tbody>
                         {rows.map((r, i) => (
                           <tr key={r.uid || r.id} className="odd:bg-white/5">
                             <td className="px-3 py-2 whitespace-nowrap w-10">{i + 1}</td>
-                            <td className="px-3 py-2 whitespace-nowrap">{r.username || 'Unknown'}</td>
+                            <td className="px-3 py-2 whitespace-nowrap">{r.username || "Unknown"}</td>
                             <td className="px-3 py-2 whitespace-nowrap text-right">{r.total}</td>
                           </tr>
                         ))}
@@ -269,24 +365,28 @@ export default function CampaignMenu() {
           </div>
         </aside>
       </div>
-    
+
       {showRankUp && (
         <RankUpModal
           toTitle={rankUpTo}
           onClose={async () => {
-          try {
-            const idx = RANKS.findIndex(r => r.title === rankUpTo);
-            if (uid) {
-              const mref = doc(db, "campaigns", uid, "cases", "__meta__");
-              await setDoc(mref, { lastAckRankIndex: idx, lastAckRankTitle: rankUpTo, updatedAt: serverTimestamp() }, { merge: true });
-              setAckRankIdx(idx);
-              setAckRankTitle(rankUpTo);
-            }
-          } catch {}
-          setShowRankUp(false);
-        }}
+            try {
+              const idx = RANKS.findIndex((r) => r.title === rankUpTo);
+              if (uid) {
+                const mref = doc(db, "campaigns", uid, "cases", "__meta__");
+                await setDoc(
+                  mref,
+                  { lastAckRankIndex: idx, lastAckRankTitle: rankUpTo, updatedAt: serverTimestamp() },
+                  { merge: true }
+                );
+                setAckRankIdx(idx);
+                setAckRankTitle(rankUpTo);
+              }
+            } catch { }
+            setShowRankUp(false);
+          }}
         />
       )}
-</div>
+    </div>
   );
 }
