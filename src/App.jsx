@@ -23,7 +23,7 @@ function TopNav({ user, onSignIn, onSignOut }) {
       <header className="flex items-center justify-between gap-2 mb-4">
         <div className="flex items-center gap-3">
           <Link to="/" className="text-2xl md:text-3xl font-bold tracking-tight">
-            WorldGuessr
+            Neo-Guessr
           </Link>
 
           {/* Desktop nav */}
