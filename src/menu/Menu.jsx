@@ -1,6 +1,16 @@
 import React from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { auth, db, collection, query, orderBy, limit, onSnapshot, doc, ready as fbReady } from "../firebase";
+import {
+  ready as fbReady,
+  auth,
+  db,
+  collection,
+  query,
+  orderBy,
+  limit,
+  onSnapshot,
+  doc,
+} from "../firebase";
 import { useSettings } from "../ctx/SettingsContext.jsx";
 import { RANKS, rankFor } from "../lib/ranks.js";
 

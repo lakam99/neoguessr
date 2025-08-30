@@ -5,9 +5,15 @@ import Profile from "./profile/Profile.jsx";
 import Menu from "./menu/Menu.jsx";
 import CampaignMenu from "./campaign/CampaignMenu.jsx";
 import CampaignGame from "./campaign/CampaignGame.jsx";
-import { auth, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signOut, ready as fbReady } from "./firebase";
+import {
+  ready as fbReady,
+  auth,
+  onAuthStateChanged,
+  GoogleAuthProvider,
+  signInWithPopup,
+  signOut
+} from "./firebase";
 import { SettingsContext, defaultSettings } from "./ctx/SettingsContext.jsx";
-
 
 function TopNav({ user, onSignIn, onSignOut }) {
   const [open, setOpen] = React.useState(false);
