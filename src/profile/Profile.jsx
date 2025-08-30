@@ -1,6 +1,7 @@
 import React from "react";
 import { ready as fbReady, auth, db, GoogleAuthProvider, signInWithPopup, updateProfile, doc, setDoc, collection, onSnapshot, query, orderBy, updateDoc, deleteDoc, serverTimestamp } from "../firebase";
 import { Link } from "react-router-dom";
+import { useToast } from "../ctx/ToastContext.jsx";
 import { loadGoogleMaps } from "../lib/maps.js";
 import StreetViewStatic from "../components/StreetViewStatic.jsx";
 import GuessMap from "../components/GuessMap.jsx";
@@ -37,9 +38,9 @@ export default function Profile({ user }) {
 
   async function ensureSignin() {
     if (user) return true;
-    if (!fbReady) { alert("Firebase not configured."); return false; }
+    if (!fbReady) { toast.error('Firebase not configured.'); return false; }
     try { const provider = new GoogleAuthProvider(); await signInWithPopup(auth, provider); return true; }
-    catch (e) { console.error(e); alert("Sign-in failed."); return false; }
+    catch (e) { console.error(e); toast.error('Sign-in failed.'); return false; }
   }
 
   async function saveDisplayName() {
@@ -47,20 +48,20 @@ export default function Profile({ user }) {
     try {
       await updateProfile(auth.currentUser, { displayName: displayName || null });
       await setDoc(doc(db, "users", auth.currentUser.uid), { displayName: displayName || "", updatedAt: serverTimestamp() }, { merge: true });
-      alert("Display name updated.");
-    } catch (e) { console.error(e); alert("Failed to update display name."); }
+      toast.success('Display name updated.');
+    } catch (e) { console.error(e); toast.error('Failed to update display name.'); }
   }
 
   async function renameFav(id, current) {
     const label = prompt("New label:", current) || current;
     if (!label) return;
     try { await updateDoc(doc(db, "users", user.uid, "favourites", id), { label }); }
-    catch (e) { console.error(e); alert("Rename failed."); }
+    catch (e) { console.error(e); toast.error('Rename failed.'); }
   }
   async function deleteFav(id) {
     if (!confirm("Delete this favourite?")) return;
     try { await deleteDoc(doc(db, "users", user.uid, "favourites", id)); }
-    catch (e) { console.error(e); alert("Delete failed."); }
+    catch (e) { console.error(e); toast.error('Delete failed.'); }
   }
   async function moveFav(id, direction) {
     const idx = favs.findIndex((f) => f.id === id);
@@ -69,7 +70,7 @@ export default function Profile({ user }) {
     if (swapWith < 0 || swapWith >= favs.length) return;
     const a = favs[idx], b = favs[swapWith];
     try { await updateDoc(doc(db, "users", user.uid, "favourites", a.id), { order: (b.order ?? 0) - (direction === "up" ? 1 : -1) }); }
-    catch (e) { console.error(e); alert("Reorder failed."); }
+    catch (e) { console.error(e); toast.error('Reorder failed.'); }
   }
 
   function togglePreview(id){
@@ -111,31 +112,31 @@ export default function Profile({ user }) {
             {favs.map((f) => {
               const hasGuess = (f.guessLat!=null && f.guessLng!=null);
               return (
-                <div key={f.id} className="p-2 rounded-lg bg-slate-800/60">
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="text-sm">
+                <div key={f.id} className="p-2 rounded-lg bg-slate-800/60 overflow-hidden">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-3">
+                    <div className="text-sm min-w-0">
                       <div className="font-medium">{f.label || "Untitled favourite"}</div>
-                      <div className="opacity-70">
-                        Ans: {f.lat?.toFixed(4)}, {f.lng?.toFixed(4)} {f.panoId ? `· ${f.panoId}` : ""}
+                      <div className="opacity-70 break-words">
+                        Ans: {f.lat?.toFixed(4)}, {f.lng?.toFixed(4)} {f.panoId ? `· ${String(f.panoId).slice(0,12)}…` : ""}
                         { hasGuess ? <> · Guess: {f.guessLat.toFixed(4)}, {f.guessLng.toFixed(4)}</> : null }
                         { (f.points!=null) ? <> · {f.points} pts</> : null }
                       </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <button onClick={() => togglePreview(f.id)} className="px-2 py-1 rounded bg-emerald-700 hover:bg-emerald-600">{expanded[f.id] ? "Hide" : "Preview"}</button>
-                      <button onClick={() => moveFav(f.id, "up")} className="px-2 py-1 rounded bg-slate-700 hover:bg-slate-600" title="Move up">↑</button>
-                      <button onClick={() => moveFav(f.id, "down")} className="px-2 py-1 rounded bg-slate-700 hover:bg-slate-600" title="Move down">↓</button>
-                      <button onClick={() => renameFav(f.id, f.label || "Favourite")} className="px-2 py-1 rounded bg-slate-700 hover:bg-slate-600">Rename</button>
-                      <button onClick={() => deleteFav(f.id)} className="px-2 py-1 rounded bg-red-600 hover:bg-red-500">Delete</button>
+                    <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 w-full sm:w-auto">
+                      <button onClick={() => togglePreview(f.id)} className="px-2 py-1 text-xs rounded bg-emerald-700 hover:bg-emerald-600">{expanded[f.id] ? "Hide" : "Preview"}</button>
+                      <button onClick={() => moveFav(f.id, "up")} className="px-2 py-1 text-xs rounded bg-slate-700 hover:bg-slate-600" title="Move up">↑</button>
+                      <button onClick={() => moveFav(f.id, "down")} className="px-2 py-1 text-xs rounded bg-slate-700 hover:bg-slate-600" title="Move down">↓</button>
+                      <button onClick={() => renameFav(f.id, f.label || "Favourite")} className="px-2 py-1 text-xs rounded bg-slate-700 hover:bg-slate-600">Rename</button>
+                      <button onClick={() => deleteFav(f.id)} className="px-2 py-1 text-xs rounded bg-red-600 hover:bg-red-500">Delete</button>
                     </div>
                   </div>
 
                   {expanded[f.id] && (
                     <div className="grid md:grid-cols-3 gap-3 mt-3">
-                      <div className="md:col-span-2 h-64 rounded-xl overflow-hidden ring-1 ring-white/10">
+                      <div className="md:col-span-2 h-56 md:h-64 rounded-xl overflow-hidden ring-1 ring-white/10">
                         <StreetViewStatic lat={f.lat} lng={f.lng} panoId={f.panoId || undefined} heading={0} pitch={20} />
                       </div>
-                      <div className="md:col-span-1 h-64 rounded-xl overflow-hidden ring-1 ring-white/10 bg-slate-900">
+                      <div className="md:col-span-1 h-56 md:h-64 rounded-xl overflow-hidden ring-1 ring-white/10 bg-slate-900">
                         <GuessMap
                           googleReady={googleReady}
                           guess={hasGuess ? [f.guessLat, f.guessLng] : null}

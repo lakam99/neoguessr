@@ -2,3 +2,10 @@
 @tailwind components;
 @tailwind utilities;
 html, body, #root { height: 100%; }
+
+
+/* mobile tweaks */
+button { touch-action: manipulation; }
+@supports (height: 100dvh) {
+  .min-h-screen { min-height: 100dvh; }
+}
