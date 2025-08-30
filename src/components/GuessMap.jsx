@@ -33,6 +33,7 @@ export default function GuessMap({
       mapTypeControl: false,
       streetViewControl: false,
       fullscreenControl: false,
+      disableDoubleClickZoom: true,
     });
   }, [googleReady]);
 
@@ -164,12 +165,22 @@ export default function GuessMap({
       }
     }
 
-    if (!bounds.isEmpty()) {
+    // Only fit/zoom when an answer exists; never zoom on guess-only clicks
+    const hasAnswer =
+      !!answer &&
+      (revealMode !== "circle" || (revealMode === "circle" && revealCircleKm && revealCircleKm > 0));
+
+    if (hasAnswer && !bounds.isEmpty()) {
       map.current.fitBounds(bounds, { top: 24, right: 24, bottom: 24, left: 24 });
       if (revealMode === "circle") {
         const z = map.current.getZoom?.();
         if (z && z > 12) map.current.setZoom(12);
       }
+    } else {
+      // Guess-only: do not change zoom. Optional gentle pan (kept disabled to avoid motion):
+      // if (Array.isArray(guess)) {
+      //   map.current.panTo(new google.maps.LatLng(guess[0], guess[1]));
+      // }
     }
   }, [googleReady, answer, guess, revealMode, revealCircleKm]);
 

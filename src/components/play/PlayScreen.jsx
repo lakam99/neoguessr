@@ -20,18 +20,19 @@ export default function PlayScreen(props) {
     answer = null,
     text = "Investigate the photo and make your best guess.",
     guess = null,
-    onGuess = () => {},
+    onGuess = () => { },
     picking = false,
-    onSubmit = () => {},
-    onNext = () => {},
-    onSaveFavourite = () => {},
-    onSaveScore = () => {},
+    onSubmit = () => { },
+    onNext = () => { },
+    onSaveFavourite = () => { },
+    onSaveScore = () => { },
     showSaveScore = false,
     nextLabel = "Next round",
-  mapRevealMode = "marker",
-  mapRevealCircleKm = null,
+    mapRevealMode = "marker",
+    mapRevealCircleKm = null,
+    mapRevealShowAnswer = false,
     mobileMode = "pano",
-    setMobileMode = () => {},
+    setMobileMode = () => { },
   } = props;
 
   const leftBadges = [
@@ -41,8 +42,8 @@ export default function PlayScreen(props) {
   const resultBadge =
     reveal && lastResult
       ? `${label === "Round" ? "This round" : "This stage"}: ${Math.round(
-          lastResult.points
-        )} pts · ${Math.round(lastResult.distanceKm)} km`
+        lastResult.points
+      )} pts · ${Math.round(lastResult.distanceKm)} km`
       : null;
 
   // NEW: single source of truth for panel heights
@@ -63,9 +64,8 @@ export default function PlayScreen(props) {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* Pano panel */}
         <div
-          className={`lg:col-span-2 ${
-            mobileMode === "pano" ? "block" : "hidden"
-          } lg:block`}
+          className={`lg:col-span-2 ${mobileMode === "pano" ? "block" : "hidden"
+            } lg:block`}
         >
           <PanoPanel
             googleReady={googleReady}
@@ -81,14 +81,13 @@ export default function PlayScreen(props) {
 
         {/* Map panel */}
         <div
-          className={`lg:col-span-1 ${
-            mobileMode === "map" ? "block" : "hidden"
-          } lg:block`}
+          className={`lg:col-span-1 ${mobileMode === "map" ? "block" : "hidden"
+            } lg:block`}
         >
           <MapPanel
             googleReady={googleReady}
             guess={guess}
-            answer={reveal ? answer : null}
+            answer={mapRevealShowAnswer ? answer : null}
             onGuess={onGuess}
             heightClass={panelHeightClass}
             revealMode={mapRevealMode}

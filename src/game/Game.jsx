@@ -204,6 +204,7 @@ export default function Game({ user }) {
       nextLabel={round >= maxRounds ? "Play again" : "Next round"}
       mobileMode={mobileMode}
       setMobileMode={setMobileMode}
+      mapRevealShowAnswer={reveal}
     />
 
   );

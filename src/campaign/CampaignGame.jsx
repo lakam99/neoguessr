@@ -45,9 +45,7 @@ export default function CampaignGame() {
         }
       }
     })();
-    return () => {
-      mounted = false;
-    };
+    return () => { mounted = false; };
   }, []);
 
   // Load campaign
@@ -55,10 +53,7 @@ export default function CampaignGame() {
     let cancelled = false;
     async function init() {
       try {
-        if (!API_KEY) {
-          setLoading(false);
-          return;
-        }
+        if (!API_KEY) { setLoading(false); return; }
         if (uid && caseId) {
           const dref = doc(db, "campaigns", uid, "cases", caseId);
           const snap = await getDoc(dref);
@@ -83,22 +78,18 @@ export default function CampaignGame() {
       }
     }
     init();
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
   }, [uid, caseId]);
 
   if (loading) return <div className="p-6">Loading…</div>;
-  if (!campaign)
+  if (!campaign) {
     return (
       <div className="p-6">
         No campaign found. Create one in{" "}
-        <Link to="/campaign" className="underline">
-          Campaign Menu
-        </Link>
-        .
+        <Link to="/campaign" className="underline">Campaign Menu</Link>.
       </div>
     );
+  }
 
   const stage = campaign.stages[stageIndex];
   const maxStages = campaign.stages.length;
@@ -106,24 +97,29 @@ export default function CampaignGame() {
     ? { lat: stage.lat, lng: stage.lng, panoId: stage.panoId || null, pov: stage.pov || null }
     : null;
   const freezePano = true;
+  const radiusKm = getRevealRadiusKm(stageIndex, stage);
 
   async function onSubmit() {
     if (!guess || !stage) return;
+
     const guessPt = { lat: guess[0], lng: guess[1] };
     const dist = distanceKm(guessPt, answer);
+
+    // Determine pass/fail against the stage radius
+    const ok = dist <= radiusKm + 1e-9;
+
+    // Points: zero on failure
     const base = 1000;
-    const thresholds = stage.thresholdKm || [1000, 500]; // optional stage tuning
-    const bonus = dist <= thresholds[1] ? 1.2 : 1.0;
-    const points = Math.round(base * bonus);
-    setLastResult({ distanceKm: dist, base, mult: bonus, points });
+    const thresholds = stage.thresholdKm || [1000, 500];
+    const bonus = ok && dist <= thresholds[1] ? 1.2 : 1.0;
+    const points = ok ? Math.round(base * bonus) : 0;
+
+    // Show result; enter post-guess state (Submit hidden, CTA shows)
+    setLastResult({ distanceKm: dist, base, mult: ok ? bonus : 0, points });
+    setCanAdvance(ok);
     setReveal(true);
 
-    // Must be inside radius to advance
-    const radiusKm = getRevealRadiusKm(stageIndex, stage);
-    const ok = dist <= radiusKm + 1e-9;
-    setCanAdvance(ok);
-
-    // Persist per-stage result (always), progress (only if ok), and score
+    // Persist: always record per-stage result; progress/score only on success
     try {
       if (uid && caseId) {
         const dref = doc(db, "campaigns", uid, "cases", caseId);
@@ -134,17 +130,21 @@ export default function CampaignGame() {
           points,
           submittedAt: serverTimestamp(),
         };
-        const partial = {};
-        partial[`results.${stageIndex}`] = resultPayload;
-        partial["updatedAt"] = serverTimestamp();
-        if (ok) {
-          partial["progress"] = Math.min(stageIndex + 1, maxStages - 1);
-        }
-        await updateDoc(dref, partial);
-        await updateDoc(dref, { score: increment(points) });
 
-        // Reflect score immediately in UI
-        setTotalScore((s) => s + points);
+        if (ok) {
+          await updateDoc(dref, {
+            [`results.${stageIndex}`]: resultPayload,
+            progress: Math.min(stageIndex + 1, maxStages - 1),
+            updatedAt: serverTimestamp(),
+          });
+          await updateDoc(dref, { score: increment(points) });
+          setTotalScore((s) => s + points);
+        } else {
+          await updateDoc(dref, {
+            [`results.${stageIndex}`]: resultPayload,
+            updatedAt: serverTimestamp(),
+          });
+        }
       }
     } catch (e) {
       console.error("Failed to save campaign progress:", e);
@@ -152,13 +152,15 @@ export default function CampaignGame() {
   }
 
   async function onNext() {
+    // Fail case: "Try Again" — stay on same stage and let them adjust guess
     if (!canAdvance) {
-      // Stay on same stage; try again
       setReveal(false);
       setLastResult(null);
-      setGuess(null);
+      // keep `guess` so they see where they clicked; they can move it and resubmit
       return;
     }
+
+    // Success case: advance
     const nextIndex = Math.min(stageIndex + 1, maxStages - 1);
     setReveal(false);
     setGuess(null);
@@ -166,7 +168,6 @@ export default function CampaignGame() {
     setStageIndex(nextIndex);
     setCanAdvance(false);
 
-    // Persist index (already written on submit when ok; this is a safety write)
     try {
       if (uid && caseId) {
         const dref = doc(db, "campaigns", uid, "cases", caseId);
@@ -183,20 +184,15 @@ export default function CampaignGame() {
     const label = `Favourite — Stage ${stageIndex + 1} (${stage.lat.toFixed(3)}, ${stage.lng.toFixed(3)})`;
     try {
       await addDoc(collection(db, "users", user.uid, "favourites"), {
-        lat: stage.lat,
-        lng: stage.lng,
-        panoId: stage.panoId || null,
-        label,
-        order: Date.now(),
+        lat: stage.lat, lng: stage.lng, panoId: stage.panoId || null,
+        label, order: Date.now(),
         guessLat: Array.isArray(guess) ? guess[0] : null,
         guessLng: Array.isArray(guess) ? guess[1] : null,
         distanceKm: lastResult ? Number(lastResult.distanceKm.toFixed(3)) : null,
         points: lastResult ? Math.round(lastResult.points) : null,
         createdAt: serverTimestamp(),
       });
-    } catch (e) {
-      console.error(e);
-    }
+    } catch (e) { console.error(e); }
   }
 
   return (
@@ -211,6 +207,7 @@ export default function CampaignGame() {
       loading={loading}
       error={null}
       freezePano={freezePano}
+      // Pano always shows the image
       answer={answer}
       text={stage?.text || "Investigate the photo and make your best guess."}
       guess={guess}
@@ -222,15 +219,16 @@ export default function CampaignGame() {
       showSaveScore={false}
       nextLabel={
         canAdvance
-          ? stageIndex >= maxStages - 1
-            ? "Finish campaign"
-            : "Next stage"
-          : "Try again"
+          ? (stageIndex >= maxStages - 1 ? "Finish campaign" : "Next stage")
+          : "Try Again"
       }
       mobileMode={mobileMode}
       setMobileMode={setMobileMode}
-      mapRevealMode="circle"
-      mapRevealCircleKm={getRevealRadiusKm(stageIndex, stage)}
+      // Map reveal: circle only on success; on failure, no answer is revealed
+      mapRevealMode={canAdvance ? "circle" : "marker"}
+      mapRevealCircleKm={canAdvance ? radiusKm : null}
+      // Requires PlayScreen to gate map's answer with this flag:
+      mapRevealShowAnswer={canAdvance && reveal}
     />
   );
 }
