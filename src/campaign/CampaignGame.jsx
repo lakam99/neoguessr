@@ -1,7 +1,6 @@
 import React from "react";
 import { useNavigate, useParams, Link } from "react-router-dom";
-import { auth, db, doc, collection, addDoc, serverTimestamp, updateDoc, setDoc } from "../firebase";
-import { getDoc } from "firebase/firestore";
+import { auth, db, doc, collection, addDoc, serverTimestamp, updateDoc, setDoc, getDoc } from "../firebase";
 import { loadGoogleMaps } from "../lib/maps.js";
 import { distanceKm } from "../lib/campaign.js";
 import PlayScreen from "../components/play/PlayScreen.jsx";
@@ -29,12 +28,14 @@ export default function CampaignGame() {
   const [loading, setLoading] = React.useState(true);
   const [campaign, setCampaign] = React.useState(null);
   const [stageIndex, setStageIndex] = React.useState(0);
-  const [guess, setGuess] = React.useState(null);
+  const [guess, setGuess] = React.useState(null); // [lat,lng]
   const [reveal, setReveal] = React.useState(false);
   const [canAdvance, setCanAdvance] = React.useState(false);
   const [lastResult, setLastResult] = React.useState(null);
+  const [totalScore, setTotalScore] = React.useState(0); // local display only
   const [googleReady, setGoogleReady] = React.useState(false);
   const [mobileMode, setMobileMode] = React.useState("pano");
+  const [picking] = React.useState(false);
 
   const uid = auth?.currentUser?.uid || null;
 
@@ -46,7 +47,9 @@ export default function CampaignGame() {
         try {
           await loadGoogleMaps(API_KEY);
           if (mounted) setGoogleReady(true);
-        } catch (e) { console.error(e); }
+        } catch (e) {
+          console.error(e);
+        }
       }
     })();
     return () => { mounted = false; };
@@ -61,13 +64,17 @@ export default function CampaignGame() {
         if (uid && caseId) {
           const dref = doc(db, "campaigns", uid, "cases", caseId);
           const snap = await getDoc(dref);
-          if (snap.exists() && !cancelled) {
+          if (snap.exists()) {
             const data = snap.data();
-            const stages = Array.isArray(data.stages) ? data.stages : [];
-            const prog = typeof data.progress === "number" ? data.progress : 0;
-            setCampaign({ ...data, id: dref.id });
-            setStageIndex(Math.min(prog, stages.length - 1));
-            setLoading(false);
+            if (!cancelled) {
+              const stages = Array.isArray(data.stages) ? data.stages : [];
+              const maxIdx = Math.max(0, stages.length - 1);
+              const prog = typeof data.progress === "number" ? data.progress : 0;
+              setCampaign({ ...data, id: dref.id });
+              setStageIndex(Math.min(prog, maxIdx));
+              setTotalScore(0); // per-run display (completion award is separate)
+              setLoading(false);
+            }
             return;
           }
         }
@@ -91,38 +98,54 @@ export default function CampaignGame() {
     );
   }
 
+  const pointsEligible = !campaign.finalized; // replayed campaigns are practice (no award)
   const stage = campaign.stages[stageIndex];
   const maxStages = campaign.stages.length;
-  const answer = stage ? { lat: stage.lat, lng: stage.lng, panoId: stage.panoId || null, pov: stage.pov || null } : null;
+  const answer = stage
+    ? { lat: stage.lat, lng: stage.lng, panoId: stage.panoId || null, pov: stage.pov || null }
+    : null;
+  const freezePano = true;
   const radiusKm = getRevealRadiusKm(stageIndex, stage);
 
   async function onSubmit() {
     if (!guess || !stage) return;
+
     const guessPt = { lat: guess[0], lng: guess[1] };
     const dist = distanceKm(guessPt, answer);
 
+    // Determine pass/fail against the stage radius
     const ok = dist <= radiusKm + 1e-9;
-    setLastResult({ distanceKm: dist });
+
+    // Local feedback points (for UI only — final award is by difficulty on completion)
+    const base = 1000;
+    const thresholds = stage.thresholdKm || [1000, 500];
+    const bonus = ok && dist <= thresholds[1] ? 1.2 : 1.0;
+    const points = ok ? Math.round(base * bonus) : 0;
+
+    // Show result; enter post-guess state
+    setLastResult({ distanceKm: dist, base, mult: ok ? bonus : 0, points });
     setCanAdvance(ok);
     setReveal(true);
+    if (ok && pointsEligible && points > 0) setTotalScore((s) => s + points);
 
+    // Persist: always record per-stage result; progress only on success
     try {
       if (uid && caseId) {
         const dref = doc(db, "campaigns", uid, "cases", caseId);
-        await updateDoc(dref, {
-          [`results.${stageIndex}`]: {
-            guessLat: guess[0],
-            guessLng: guess[1],
-            distanceKm: Number(dist.toFixed(3)),
-            submittedAt: serverTimestamp(),
-          },
-          updatedAt: serverTimestamp(),
-        });
-        if (ok) {
-          await updateDoc(dref, { progress: Math.min(stageIndex + 1, maxStages - 1) });
-        }
+        const resultPayload = {
+          guessLat: guess[0],
+          guessLng: guess[1],
+          distanceKm: Number(dist.toFixed(3)),
+          points, // informational only
+          submittedAt: serverTimestamp(),
+        };
+        const partial = { [`results.${stageIndex}`]: resultPayload, updatedAt: serverTimestamp() };
+        if (ok) partial.progress = Math.min(stageIndex + 1, maxStages - 1);
+        await updateDoc(dref, partial);
       }
-    } catch (e) { console.error("Failed to save guess:", e); }
+    } catch (e) {
+      console.error("Failed to save campaign progress:", e);
+    }
   }
 
   async function finalizeCampaign() {
@@ -131,14 +154,14 @@ export default function CampaignGame() {
       const dref = doc(db, "campaigns", uid, "cases", caseId);
       const snap = await getDoc(dref);
       if (!snap.exists()) return;
-      const data = snap.data();
-      if (data.finalized) return;
+      const data = snap.data() || {};
+      if (data.finalized) return; // avoid double counting
 
       const dif = data.difficulty || "standard";
       const award = DIFFICULTY_AWARD[dif] ?? DIFFICULTY_AWARD.standard;
       const username = auth?.currentUser?.displayName || auth?.currentUser?.email || "anonymous";
 
-      // Update totals
+      // Update cumulative totals (monotonic add)
       const totalRef = doc(db, "leaderboards", "campaign", "totals", uid);
       const totalSnap = await getDoc(totalRef);
       if (totalSnap.exists()) {
@@ -148,12 +171,12 @@ export default function CampaignGame() {
         await setDoc(totalRef, { username, uid, total: award, updatedAt: serverTimestamp() });
       }
 
-      // Insert individual score
+      // Insert individual case score row
       await addDoc(collection(db, "leaderboards", "campaign", "scores"), {
         username, uid, score: award, caseId, createdAt: serverTimestamp(),
       });
 
-      // Mark finalized
+      // Mark campaign finalized and reset for practice
       await updateDoc(dref, {
         finalized: true,
         finalScore: award,
@@ -162,28 +185,81 @@ export default function CampaignGame() {
         completedAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       });
-    } catch (e) { console.error("Finalize failed:", e); }
+    } catch (e) {
+      console.error("Finalize failed:", e);
+    }
   }
 
   async function onNext() {
+    // Failure -> reset campaign (stage 1, clear score/results)
     if (!canAdvance) {
-      // Failure resets
+      try {
+        if (uid && caseId) {
+          const dref = doc(db, "campaigns", uid, "cases", caseId);
+          await updateDoc(dref, { progress: 0, score: 0, results: {}, updatedAt: serverTimestamp() });
+        }
+      } catch (e) { console.error("Failed to reset campaign:", e); }
+      setStageIndex(0);
+      setTotalScore(0);
+      setGuess(null);
+      setLastResult(null);
+      setReveal(false);
+      setCanAdvance(false);
+      return;
+    }
+
+    // Success at final stage -> finalize (award once), then exit to menu
+    if (stageIndex >= maxStages - 1) {
+      if (pointsEligible) {
+        await finalizeCampaign();
+      } else {
+        // practice replay: just ensure progress reset on doc
+        try {
+          if (uid && caseId) {
+            const dref = doc(db, "campaigns", uid, "cases", caseId);
+            await updateDoc(dref, { progress: 0, updatedAt: serverTimestamp() });
+          }
+        } catch (e) { console.error("Failed to restart practice:", e); }
+      }
+      // Navigate back after finishing
+      setReveal(false); setGuess(null); setLastResult(null); setCanAdvance(false);
+      try { navigate("/campaign"); } catch {}
+      return;
+    }
+
+    // Success mid-campaign -> advance
+    const nextIndex = Math.min(stageIndex + 1, maxStages - 1);
+    setStageIndex(nextIndex);
+    setReveal(false);
+    setGuess(null);
+    setLastResult(null);
+    setCanAdvance(false);
+
+    try {
       if (uid && caseId) {
         const dref = doc(db, "campaigns", uid, "cases", caseId);
-        await updateDoc(dref, { progress: 0, score: 0, results: {}, updatedAt: serverTimestamp() });
+        await updateDoc(dref, { progress: nextIndex, updatedAt: serverTimestamp() });
       }
-      setStageIndex(0); setGuess(null); setLastResult(null); setReveal(false); setCanAdvance(false);
-      return;
+    } catch (e) {
+      console.error("Failed to save campaign progress index:", e);
     }
+  }
 
-    if (stageIndex >= maxStages - 1) {
-      await finalizeCampaign();
-      navigate("/campaign");
-      return;
-    }
-
-    setStageIndex(stageIndex + 1);
-    setGuess(null); setLastResult(null); setReveal(false); setCanAdvance(false);
+  async function saveFavourite() {
+    const user = auth?.currentUser || null;
+    if (!user || !stage) return;
+    const label = `Favourite — Stage ${stageIndex + 1} (${stage.lat.toFixed(3)}, ${stage.lng.toFixed(3)})`;
+    try {
+      await addDoc(collection(db, "users", user.uid, "favourites"), {
+        lat: stage.lat, lng: stage.lng, panoId: stage.panoId || null,
+        label, order: Date.now(),
+        guessLat: Array.isArray(guess) ? guess[0] : null,
+        guessLng: Array.isArray(guess) ? guess[1] : null,
+        distanceKm: lastResult ? Number(lastResult.distanceKm?.toFixed?.(3) || lastResult.distanceKm) : null,
+        points: lastResult ? Math.round(lastResult.points || 0) : null,
+        createdAt: serverTimestamp(),
+      });
+    } catch (e) { console.error(e); }
   }
 
   return (
@@ -191,17 +267,22 @@ export default function CampaignGame() {
       label="Stage"
       index={stageIndex + 1}
       max={maxStages}
+      totalScore={totalScore}
       reveal={reveal}
       lastResult={lastResult}
       googleReady={googleReady}
       loading={loading}
-      freezePano={true}
+      error={null}
+      freezePano={freezePano}
+      // Pano always shows the image
       answer={answer}
       text={stage?.text || "Investigate the photo and make your best guess."}
       guess={guess}
       onGuess={(arr) => setGuess(arr)}
+      picking={false}
       onSubmit={onSubmit}
       onNext={onNext}
+      onSaveFavourite={saveFavourite}
       showSaveScore={false}
       nextLabel={
         canAdvance
@@ -210,6 +291,7 @@ export default function CampaignGame() {
       }
       mobileMode={mobileMode}
       setMobileMode={setMobileMode}
+      // Map reveal: circle only on success; on failure, no answer is revealed
       mapRevealMode={canAdvance ? "circle" : "marker"}
       mapRevealCircleKm={canAdvance ? radiusKm : null}
       mapRevealShowAnswer={canAdvance && reveal}

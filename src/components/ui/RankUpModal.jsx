@@ -1,5 +1,7 @@
 import React from "react";
 
+import RankMedal, { variantForRankTitle } from "./RankMedal.jsx";
+
 export default function RankUpModal({ toTitle, onClose }) {
   const pieces = Array.from({ length: 70 }, (_, i) => i);
 

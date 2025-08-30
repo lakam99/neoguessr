@@ -1,5 +1,5 @@
 import React from "react";
-import { ready as fbReady, db, collection, addDoc, serverTimestamp, query, orderBy, limit, onSnapshot, doc, setDoc, increment } from "../firebase";
+import { db, collection, addDoc, serverTimestamp, query, orderBy, limit, onSnapshot, doc, setDoc, increment } from "../firebase";
 import { useSettings } from "../ctx/SettingsContext.jsx";
 import { useToast } from "../ctx/ToastContext.jsx";
 import { loadGoogleMaps } from "../lib/maps.js";

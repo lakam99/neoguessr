@@ -1,3 +1,4 @@
+import RankMedal, { variantForRankTitle } from "./RankMedal.jsx";
 import React from "react";
 
 /**

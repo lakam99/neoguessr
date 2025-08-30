@@ -1,6 +1,37 @@
-import { initializeApp } from 'firebase/app'
-import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged, updateProfile } from 'firebase/auth'
-import { getFirestore, collection, addDoc, serverTimestamp, query, orderBy, limit, onSnapshot, doc, setDoc, updateDoc, deleteDoc, increment } from 'firebase/firestore'
+// Centralized Firebase module (Vite environment)
+import { initializeApp } from "firebase/app";
+import {
+  getAuth,
+  GoogleAuthProvider,
+  onAuthStateChanged,
+  signInWithPopup,
+  signOut,
+  updateProfile,
+} from "firebase/auth";
+import {
+  getFirestore,
+  collection,
+  query,
+  where,
+  orderBy,
+  limit,
+  onSnapshot,
+  doc,
+  setDoc,
+  updateDoc,
+  deleteDoc,
+  addDoc,
+  getDoc,
+  getDocs,
+  serverTimestamp,
+  increment,
+  writeBatch,
+  runTransaction,
+  Timestamp,
+  arrayUnion,
+  arrayRemove,
+} from "firebase/firestore";
+
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
   authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
@@ -9,8 +40,52 @@ const firebaseConfig = {
   storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
   messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
   measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID,
+};
+
+// Expose a boolean so UI can show "offline" if not configured
+const ready = Boolean(
+  firebaseConfig.apiKey &&
+  firebaseConfig.projectId &&
+  firebaseConfig.authDomain
+);
+
+let app, auth, db;
+if (ready) {
+  app = initializeApp(firebaseConfig);
+  auth = getAuth(app);
+  db = getFirestore(app);
 }
-const ready = Boolean(firebaseConfig.apiKey && firebaseConfig.projectId && firebaseConfig.authDomain)
-let app, auth, db
-if (ready) { app = initializeApp(firebaseConfig); auth = getAuth(app); db = getFirestore(app) }
-export { ready, app, auth, db, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged, updateProfile, collection, addDoc, serverTimestamp, query, orderBy, limit, onSnapshot, doc, setDoc, updateDoc, deleteDoc, increment }
+
+// Instances + commonly used helpers
+export {
+  ready,
+  auth,
+  db,
+  // Auth helpers
+  GoogleAuthProvider,
+  onAuthStateChanged,
+  signInWithPopup,
+  signOut,
+  updateProfile,
+  // Firestore helpers
+  collection,
+  query,
+  where,
+  orderBy,
+  limit,
+  onSnapshot,
+  doc,
+  setDoc,
+  updateDoc,
+  deleteDoc,
+  addDoc,
+  getDoc,
+  getDocs,
+  serverTimestamp,
+  increment,
+  writeBatch,
+  runTransaction,
+  Timestamp,
+  arrayUnion,
+  arrayRemove,
+};

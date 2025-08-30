@@ -1,20 +1,6 @@
 import React from "react";
 import { Link, useNavigate } from "react-router-dom";
-import {
-  ready as fbReady,
-  auth,
-  db,
-  collection,
-  addDoc,
-  serverTimestamp,
-  query,
-  orderBy,
-  onSnapshot,
-  doc,
-  setDoc,
-  updateDoc,
-  deleteDoc,
-} from "../firebase";
+import { auth, db, collection, addDoc, serverTimestamp, doc, setDoc, updateDoc, deleteDoc } from "../firebase";
 import { useToast } from "../ctx/ToastContext.jsx";
 import { loadGoogleMaps } from "../lib/maps.js";
 import { generateBackwardTrail } from "../lib/campaign.js";
@@ -68,61 +54,14 @@ export default function CampaignMenu() {
 
   const [showRankUp, setShowRankUp] = React.useState(false);
   const [rankUpTo, setRankUpTo] = React.useState(null);
+  const [ackRankIdx, setAckRankIdx] = React.useState(-1);
+  const [ackRankTitle, setAckRankTitle] = React.useState(null);
 
   const user = auth?.currentUser || null;
   const uid = user?.uid || null;
 
   // Subscribe to user's campaigns + leaderboard
-  React.useEffect(() => {
-    if (!fbReady || !uid) return;
-    const qCases = query(collection(db, "campaigns", uid, "cases"), orderBy("updatedAt", "desc"));
-    const unsub1 = onSnapshot(qCases, (snap) => {
-      setMyCases(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
-    });
-
-    const qLead = query(collection(db, "leaderboards", "campaign", "totals"), orderBy("total", "desc"));
-    const unsub2 = onSnapshot(qLead, (snap) => {
-      setLeader(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
-    });
-
-    return () => { unsub1 && unsub1(); unsub2 && unsub2(); };
-  }, [fbReady, uid]);
-
-  // Rank math
-  const myTotal = React.useMemo(() => {
-    const entry = leader.find((l) => l.uid === uid);
-    return entry?.total || 0;
-  }, [leader, uid]);
-  const myRank = rankFor(myTotal);
-  const nextRank = React.useMemo(() => {
-    const idx = RANKS.findIndex((r) => r.title === myRank.title);
-    return idx >= 0 && idx < RANKS.length - 1 ? RANKS[idx + 1] : null;
-  }, [myRank]);
-  const rankProgress = React.useMemo(() => {
-    const curMin = myRank.min || 0;
-    const nextMin = nextRank ? nextRank.min : Math.max(curMin, myTotal);
-    const span = Math.max(1, nextMin - curMin);
-    const val = Math.min(span, Math.max(0, myTotal - curMin));
-    const pct = Math.round((val / span) * 100);
-    return { curMin, nextMin, val, span, pct };
-  }, [myRank, nextRank, myTotal]);
-  const buckets = React.useMemo(() => groupByRank(leader), [leader]);
-  // Rank-up celebration modal
-  React.useEffect(() => {
-    if (!uid || !myRank?.title) return;
-    try {
-      const key = "wg_last_rank_title";
-      const prev = localStorage.getItem(key);
-      const cur = myRank.title;
-      const idx = (t) => Math.max(0, RANKS.findIndex(r => r.title === t));
-      if (prev && idx(cur) > idx(prev)) {
-        setRankUpTo(cur);
-        setShowRankUp(true);
-      }
-      localStorage.setItem(key, cur);
-    } catch {}
-  }, [uid, myRank?.title]);
-
+  
 
   // Actions
   async function createCampaign() {
@@ -334,7 +273,18 @@ export default function CampaignMenu() {
       {showRankUp && (
         <RankUpModal
           toTitle={rankUpTo}
-          onClose={() => setShowRankUp(false)}
+          onClose={async () => {
+          try {
+            const idx = RANKS.findIndex(r => r.title === rankUpTo);
+            if (uid) {
+              const mref = doc(db, "campaigns", uid, "cases", "__meta__");
+              await setDoc(mref, { lastAckRankIndex: idx, lastAckRankTitle: rankUpTo, updatedAt: serverTimestamp() }, { merge: true });
+              setAckRankIdx(idx);
+              setAckRankTitle(rankUpTo);
+            }
+          } catch {}
+          setShowRankUp(false);
+        }}
         />
       )}
 </div>
