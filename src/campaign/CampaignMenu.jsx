@@ -19,6 +19,7 @@ import { useToast } from "../ctx/ToastContext.jsx";
 import { loadGoogleMaps } from "../lib/maps.js";
 import { generateBackwardTrail } from "../lib/campaign.js";
 import { RANKS, rankFor, groupByRank } from "../lib/ranks.js";
+import RankMedal, { variantForRankTitle } from "../components/ui/RankMedal.jsx";
 
 const API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
 
@@ -179,13 +180,13 @@ export default function CampaignMenu() {
         </div>
         <div className="w-full sm:w-auto flex flex-col sm:items-end gap-2 min-w-0">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="px-3 py-1 rounded-full bg-indigo-600/70">{myRank.title}</span>
+            <span className="px-3 py-1 rounded-full bg-indigo-600/70 flex items-center gap-2"><RankMedal variant={variantForRankTitle(myRank.title)} size={32} animated />{myRank.title}</span>
             <span className="px-3 py-1 rounded-full bg-slate-700/70">Total: {myTotal}</span>
           </div>
           {nextRank && (
             <div className="w-full sm:w-64">
               <div className="text-xs opacity-80 mb-1">
-                Progress to {nextRank.title}: {rankProgress.val} / {rankProgress.span} ({rankProgress.pct}%)
+                Progress to <span className="inline-flex items-center gap-1"><RankMedal variant={variantForRankTitle(nextRank.title)} size={10} animated />{nextRank.title}</span>: {rankProgress.val} / {rankProgress.span} ({rankProgress.pct}%)
               </div>
               <div className="h-2 rounded bg-slate-800 overflow-hidden ring-1 ring-white/10">
                 <div className="h-full bg-indigo-600" style={{ width: `${rankProgress.pct}%` }} />
@@ -283,7 +284,7 @@ export default function CampaignMenu() {
             <div className="p-3 space-y-3 max-h-[60vh] overflow-auto">
               {Object.entries(buckets).map(([rank, rows]) => (
                 <div key={rank} className="min-w-0">
-                  <div className="text-sm mb-1 opacity-80">{rank}</div>
+                  <div className="text-sm mb-1 opacity-80 flex items-center gap-2"><RankMedal variant={variantForRankTitle(rank)} size={18} animated /><span>{rank}</span></div>
                   <div className="w-full min-w-0 overflow-x-auto rounded-lg ring-1 ring-white/10">
                     <table className="w-full text-sm">
                       <tbody>
