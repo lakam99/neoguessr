@@ -19,6 +19,7 @@ import { useToast } from "../ctx/ToastContext.jsx";
 import { loadGoogleMaps } from "../lib/maps.js";
 import { generateBackwardTrail } from "../lib/campaign.js";
 import { RANKS, rankFor, groupByRank } from "../lib/ranks.js";
+import RankUpModal from "../components/ui/RankUpModal.jsx";
 
 const API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
 
@@ -64,6 +65,9 @@ export default function CampaignMenu() {
   const [difficulty, setDifficulty] = React.useState("standard");
   const [progress, setProgress] = React.useState({ pct: 0, note: "" });
 
+  const [showRankUp, setShowRankUp] = React.useState(false);
+  const [rankUpTo, setRankUpTo] = React.useState(null);
+
   const user = auth?.currentUser || null;
   const uid = user?.uid || null;
 
@@ -102,6 +106,22 @@ export default function CampaignMenu() {
     return { curMin, nextMin, val, span, pct };
   }, [myRank, nextRank, myTotal]);
   const buckets = React.useMemo(() => groupByRank(leader), [leader]);
+  // Rank-up celebration modal
+  React.useEffect(() => {
+    if (!uid || !myRank?.title) return;
+    try {
+      const key = "wg_last_rank_title";
+      const prev = localStorage.getItem(key);
+      const cur = myRank.title;
+      const idx = (t) => Math.max(0, RANKS.findIndex(r => r.title === t));
+      if (prev && idx(cur) > idx(prev)) {
+        setRankUpTo(cur);
+        setShowRankUp(true);
+      }
+      localStorage.setItem(key, cur);
+    } catch {}
+  }, [uid, myRank?.title]);
+
 
   // Actions
   async function createCampaign() {
@@ -304,6 +324,13 @@ export default function CampaignMenu() {
           </div>
         </aside>
       </div>
-    </div>
+    
+      {showRankUp && (
+        <RankUpModal
+          toTitle={rankUpTo}
+          onClose={() => setShowRankUp(false)}
+        />
+      )}
+</div>
   );
 }

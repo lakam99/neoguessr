@@ -91,6 +91,7 @@ export default function CampaignGame() {
     );
   }
 
+    const pointsEligible = !campaign.finalized;
   const stage = campaign.stages[stageIndex];
   const maxStages = campaign.stages.length;
   const answer = stage
@@ -121,8 +122,9 @@ export default function CampaignGame() {
 
     // Persist: always record per-stage result; progress/score only on success
     try {
-      if (uid && caseId) {
-        const dref = doc(db, "campaigns", uid, "cases", caseId);
+    if (uid && caseId) {
+      const dref = doc(db, "campaigns", uid, "cases", caseId);
+      if (pointsEligible) {
         const resultPayload = {
           guessLat: guess[0],
           guessLng: guess[1],
@@ -130,23 +132,27 @@ export default function CampaignGame() {
           points,
           submittedAt: serverTimestamp(),
         };
-
         if (ok) {
           await updateDoc(dref, {
             [`results.${stageIndex}`]: resultPayload,
             progress: Math.min(stageIndex + 1, maxStages - 1),
             updatedAt: serverTimestamp(),
           });
-          await updateDoc(dref, { score: increment(points) });
-          setTotalScore((s) => s + points);
+          if (points > 0) {
+            await updateDoc(dref, { score: increment(points) });
+            setTotalScore((s) => s + points);
+          }
         } else {
           await updateDoc(dref, {
             [`results.${stageIndex}`]: resultPayload,
             updatedAt: serverTimestamp(),
           });
         }
+      } else {
+        await updateDoc(dref, { updatedAt: serverTimestamp() });
       }
-    } catch (e) {
+    }
+  } catch (e) {
       console.error("Failed to save campaign progress:", e);
     }
   }
@@ -204,6 +210,35 @@ export default function CampaignGame() {
   }
 
   async function onNext() {
+    // Failure -> reset campaign (stage 1, clear score/results)
+    if (!canAdvance) {
+      try {
+        if (uid && caseId) {
+          const dref = doc(db, "campaigns", uid, "cases", caseId);
+          await updateDoc(dref, { progress: 0, score: 0, results: {}, updatedAt: serverTimestamp() });
+        }
+      } catch (e) { console.error("Failed to reset campaign:", e); }
+      setStageIndex(0); setTotalScore(0); setGuess(null); setLastResult(null); setReveal(false); setCanAdvance(false);
+      return;
+    }
+    // Final stage
+    if (stageIndex >= maxStages - 1) {
+      if (pointsEligible) {
+        await finalizeCampaign();
+        setReveal(false); setGuess(null); setLastResult(null); setCanAdvance(false);
+        try { navigate("/campaign"); } catch {}
+      } else {
+        try {
+          if (uid && caseId) {
+            const dref = doc(db, "campaigns", uid, "cases", caseId);
+            await updateDoc(dref, { progress: 0, updatedAt: serverTimestamp() });
+          }
+        } catch (e) { console.error("Failed to restart practice:", e); }
+        setStageIndex(0); setReveal(false); setGuess(null); setLastResult(null); setCanAdvance(false);
+      }
+      return;
+    }
+
     // Fail case: "Try Again" — reset campaign to stage 1 and clear score/results
     if (!canAdvance) {
       try {
