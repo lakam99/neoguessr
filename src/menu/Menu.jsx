@@ -4,7 +4,7 @@ import { useSettings } from '../ctx/SettingsContext.jsx'
 import { ready as fbReady, db, collection, query, orderBy, limit, onSnapshot } from '../firebase'
 
 const PRESETS = {
-  ez:   { includeOceans: false, lowQuotaMode: true,  svAttemptBudget: 4 },
+  tutorial:   { includeOceans: false, lowQuotaMode: true,  svAttemptBudget: 4 },
   // Moderate is land‑biased; only Hard+ include oceans
   moderate:{ includeOceans: false, lowQuotaMode: false, svAttemptBudget: 10 },
   hard: { includeOceans: true,  lowQuotaMode: false, svAttemptBudget: 12 },
@@ -12,7 +12,7 @@ const PRESETS = {
 };
 
 const MULTIPLIER_LABEL = {
-  ez: 'x0.5',
+  tutorial: 'x0.5',
   moderate: 'x1.0',
   hard: 'x1.2',
   cia: 'x1.6'
@@ -58,7 +58,7 @@ export default function Menu(){
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
         {Object.entries(PRESETS).map(([key, val]) => {
-          const title = key==='cia' ? 'CIA/Rainbolt' : key[0].toUpperCase() + key.slice(1);
+          const title = key==='cia' ? 'Operative' : key[0].toUpperCase() + key.slice(1);
           const active = draft.preset === key;
           return (
             <button
@@ -114,7 +114,7 @@ export default function Menu(){
         {/* CIA Top 10 */}
         <div className="rounded-2xl bg-slate-900/70 ring-1 ring-white/10 p-4">
           <div className="flex items-center justify-between mb-2">
-            <h3 className="font-semibold">Top 10 — CIA/Rainbolt (Global)</h3>
+            <h3 className="font-semibold">Top 10 — Operative (Global)</h3>
             <span className="text-xs opacity-70">{fbReady ? 'Live' : 'Offline (configure Firebase)'}</span>
           </div>
           <div className="overflow-y-auto h-56 md:h-72">

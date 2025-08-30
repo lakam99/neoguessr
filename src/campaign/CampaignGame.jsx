@@ -160,7 +160,7 @@ export default function CampaignGame() {
           await updateDoc(dref, {
             progress: 0,
             score: 0,
-            results: {},                 // wipe prior stage results
+            results: {},
             updatedAt: serverTimestamp(),
           });
         }
@@ -178,7 +178,7 @@ export default function CampaignGame() {
       return;
     }
 
-    // Success case: advance to next stage (unchanged)
+    // Success case: advance
     const nextIndex = Math.min(stageIndex + 1, maxStages - 1);
     setReveal(false);
     setGuess(null);
@@ -195,7 +195,6 @@ export default function CampaignGame() {
       console.error("Failed to save campaign progress index:", e);
     }
   }
-
 
   async function saveFavourite() {
     const user = auth?.currentUser || null;
@@ -246,7 +245,6 @@ export default function CampaignGame() {
       // Map reveal: circle only on success; on failure, no answer is revealed
       mapRevealMode={canAdvance ? "circle" : "marker"}
       mapRevealCircleKm={canAdvance ? radiusKm : null}
-      // Requires PlayScreen to gate map's answer with this flag:
       mapRevealShowAnswer={canAdvance && reveal}
     />
   );
